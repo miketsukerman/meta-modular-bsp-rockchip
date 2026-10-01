@@ -29,10 +29,37 @@ this layer to `conf/bblayers.conf`, then:
 MACHINE=rsb4810 bitbake core-image-minimal
 ```
 
-The resulting wic image can be written to an SD card or to the eMMC. The DDR
+The resulting wic image can be written directly to the eMMC. The DDR
 init blob (TPL), TF-A (BL31) and OP-TEE come prebuilt from the
 `rockchip-rkbin-*` recipes provided by upstream meta-rockchip; no additional
 firmware setup is needed.
+
+> **Note:** the RSB-4810 does not boot the OS directly from SD card — the
+> Advantech boot flow only uses the SD card as an *upgrade medium*. Use the
+> generated `update.img` as described below.
+
+## Updating the RSB-4810 (update.img)
+
+The build automatically produces a Rockchip `update.img`
+(`tmp/deploy/images/rsb4810/<image>.update-img`) packing the miniloader
+(`MiniLoaderAll.bin`, from rkbin via `boot_merger`), the partition map
+(`parameter.txt`), U-Boot proper and the ext4 rootfs with `afptool` +
+`rkImageMaker` — the same flow Advantech uses in its
+[Debian BSP](https://docs.aim-linux.advantech.com/docs/bsp/rockchip/Debian/Debian11/RK3568/).
+The partition offsets in `parameter.txt` match the wic layout, so an eMMC
+flashed from `update.img` is identical to one flashed from the wic image.
+
+Two ways to flash it:
+
+* **SD upgrade card (Windows):** write `update.img` to a microSD card with
+  SDDiskTool / SD_Firmware_Tool ("Upgrade Firmware" mode, per the
+  [Advantech instructions](https://docs.aim-linux.advantech.com/docs/bsp/rockchip/General/Update-Image/SD-Card)),
+  insert it into the powered-off board and power on. The miniloader flashes
+  the eMMC and prints "Please remove SD CARD!!!" on the serial console;
+  remove the card and the board reboots from eMMC.
+* **USB OTG (Linux, scriptable):** put the board into loader/maskrom mode
+  (recovery button during power-on), connect the OTG port and run
+  `upgrade_tool uf update.img` (from rkbin `tools/`) or use `rkdeveloptool`.
 
 ## RSB-4810
 
@@ -45,7 +72,7 @@ Serial console: 1500000;ttyS2 (debug UART).
 | Device    | Status | Comment                                     |
 | --------- | ------ | ------------------------------------------- |
 | eMMC      | ⚠️     | Not tested                                  |
-| SD Card   | ⚠️     | Not tested                                  |
+| SD Card   | ⚠️     | Upgrade medium only (no direct OS boot)     |
 | ETH0      | ⚠️     | 1Gbps (GMAC0, RTL8211F PHY), not tested     |
 | ETH1      | ⚠️     | 1Gbps (GMAC1, RTL8211F PHY), not tested     |
 | USB 2.0   | ⚠️     | Not tested                                  |
@@ -66,8 +93,11 @@ Legend: ✅ working, ⚠️ untested/partial, ❌ not yet supported.
 ## Layer structure
 
 ```
+classes/rockchip-update-img.bbclass    Rockchip update.img image type (eMMC upgrade)
 conf/machine/rsb4810.conf              machine configuration (thin, on top of
                                        meta-rockchip's conf/machine/include/rk3568.inc)
+recipes-bsp/rkbin/                     Rockchip miniloader (MiniLoaderAll.bin via boot_merger)
+recipes-bsp/rockchip-pack-tools/       native afptool/rkImageMaker packaging tools
 recipes-bsp/u-boot/                    U-Boot board integration (per-machine .inc + files)
 recipes-kernel/linux/                  kernel board integration:
   linux-yocto/<machine>.inc            per-machine devicetree/config wiring
