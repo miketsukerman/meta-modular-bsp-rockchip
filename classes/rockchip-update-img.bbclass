@@ -88,7 +88,7 @@ EOF
     fi
 
     cd "${PKGDIR}"
-    afptool -pack ./ "${PKGDIR}/Image/update.img" "${PKGDIR}/package-file"
+    afptool -pack ./ "${PKGDIR}/Image/update.img"
     rkImageMaker "-${RK_UPDATE_CHIP}" "${PKGDIR}/Image/MiniLoaderAll.bin" \
         "${PKGDIR}/Image/update.img" \
         "${IMGDEPLOYDIR}/${IMAGE_NAME}.update-img" \
