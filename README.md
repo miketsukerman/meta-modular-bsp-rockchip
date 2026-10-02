@@ -96,6 +96,50 @@ Two ways to flash it:
   (recovery button during power-on), connect the OTG port and run
   `upgrade_tool uf update.img` (from rkbin `tools/`) or use `rkdeveloptool`.
 
+## SD upgrade card (Linux, no SDDiskTool)
+
+The build also produces a ready-made SD upgrade card image
+(`tmp/deploy/images/rsb4810/<image>.sdupdate-img`), the Linux replacement
+for the SDDiskTool step: write it to a microSD card with `dd` (the file is
+sparse, so use `conv=sparse` only to another file — to a real card use):
+
+```
+dd if=tmp/deploy/images/rsb4810/<image>.sdupdate-img of=/dev/sdX bs=4M conv=fsync
+```
+
+The card is the normal bootable wic image plus an extra FAT32 partition
+labelled `RK_UPDATE` holding `sd_boot_config.config` (`fw_update=1`) and a
+copy of the wic image as flash payload. When the board boots from the
+card, the `rockchip-sd-installer` service (installed in every image for
+this machine) detects the upgrade volume, writes the payload to the eMMC,
+clears the `fw_update` flag, prints `Please remove SD CARD!!!` on the
+console and reboots — after which the board boots the new firmware from
+eMMC, exactly like the vendor upgrade flow.
+
+Notes:
+
+* **Triggering SD boot:** the RK3568 BootROM prefers the eMMC. On a board
+  with a working eMMC loader, erase it once (loader/maskrom mode over USB
+  OTG: `rkdeveloptool ef` or `upgrade_tool ef`) or hold the recovery
+  button so the BootROM falls through to the SD card. A board with a
+  blank/bricked eMMC boots the upgrade card directly.
+* The vendor SDDiskTool card format itself (RC4-encoded legacy IDBlock at
+  sector 64 + vendor recovery ramdisk) is not used: RK356x BootROMs
+  consume the newer unencrypted NEWIDB loader format and this BSP's
+  mainline U-Boot has no vendor recovery handoff. The wic-based card
+  boots through the standard idbloader/U-Boot/extlinux path instead.
+* The flag is cleared after flashing, so rebooting with the card still
+  inserted does not flash twice; the card can be re-armed by setting
+  `fw_update=1` in `sd_boot_config.config` again.
+
+The three build artifacts at a glance:
+
+| Artifact          | Use                                                        |
+| ----------------- | ---------------------------------------------------------- |
+| `<image>.wic`     | direct dd to SD/eMMC; SD boot needs empty eMMC loader      |
+| `<image>.update-img` | `upgrade_tool uf` / `rkdeveloptool` over USB OTG, or Windows SDDiskTool input |
+| `<image>.sdupdate-img` | dd to SD card → boots and self-flashes the eMMC       |
+
 ## RSB-4810
 
 3.5" SBC based on the Rockchip RK3568 (quad Cortex-A53/A55 class, Cortex-A55),
@@ -129,10 +173,12 @@ Legend: ✅ working, ⚠️ untested/partial, ❌ not yet supported.
 
 ```
 classes/rockchip-update-img.bbclass    Rockchip update.img image type (eMMC upgrade)
+classes/rockchip-sdupdate-img.bbclass  SD upgrade card image type (wic + RK_UPDATE volume)
 conf/machine/rsb4810.conf              machine configuration (thin, on top of
                                        meta-rockchip's conf/machine/include/rk3568.inc)
 recipes-bsp/rkbin/                     Rockchip miniloader (MiniLoaderAll.bin via boot_merger)
 recipes-bsp/rockchip-pack-tools/       native afptool/rkImageMaker packaging tools
+recipes-bsp/rockchip-sd-installer/     boot service flashing the eMMC from an SD upgrade card
 recipes-bsp/u-boot/                    U-Boot board integration (per-machine .inc + files)
 recipes-kernel/linux/                  kernel board integration:
   linux-yocto/<machine>.inc            per-machine devicetree/config wiring

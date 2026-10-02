@@ -79,7 +79,7 @@ package-file    package-file
 bootloader      Image/MiniLoaderAll.bin
 parameter       Image/parameter.txt
 uboot           Image/uboot.img
-rootfs          Image/rootfs.img
+rootfsA         Image/rootfs.img
 backup          RESERVED
 EOF
 

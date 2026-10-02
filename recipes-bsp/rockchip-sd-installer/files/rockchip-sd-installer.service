@@ -1,0 +1,10 @@
+[Unit]
+Description=Flash eMMC from a Rockchip SD upgrade card
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/rockchip-sd-installer
+
+[Install]
+WantedBy=multi-user.target

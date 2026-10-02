@@ -1,0 +1,91 @@
+#!/bin/sh
+# rockchip-sd-installer - flash the eMMC from an SD upgrade card
+#
+# Runs at boot. Does nothing unless all of the following hold:
+#   - the root filesystem is on an SD card (mmc device type "SD")
+#   - an eMMC (mmc device type "MMC") is present
+#   - the SD card has a FAT volume labelled RK_UPDATE containing
+#     sd_boot_config.config with fw_update=1 and a *.wic payload
+#
+# When they do, the wic payload is written to the eMMC, the fw_update
+# flag is cleared (so a reboot with the card still inserted does not
+# flash twice) and the board reboots.
+
+FAT_LABEL="RK_UPDATE"
+CONFIG="sd_boot_config.config"
+MNT="/run/rockchip-sd-installer"
+
+log() {
+    echo "rockchip-sd-installer: $*"
+    echo "rockchip-sd-installer: $*" > /dev/console 2>/dev/null || true
+}
+
+rootpart=$(awk '$2 == "/" { dev = $1 } END { print dev }' /proc/mounts)
+case "$rootpart" in
+    /dev/mmcblk*p*) ;;
+    *) exit 0 ;;
+esac
+rootdisk=${rootpart%p*}
+
+roottype=$(cat "/sys/block/${rootdisk#/dev/}/device/type" 2>/dev/null) || exit 0
+[ "$roottype" = "SD" ] || exit 0
+
+emmc=""
+for d in /sys/block/mmcblk*; do
+    [ -f "$d/device/type" ] || continue
+    if [ "$(cat "$d/device/type")" = "MMC" ]; then
+        emmc="/dev/${d##*/}"
+        break
+    fi
+done
+if [ -z "$emmc" ]; then
+    log "booted from SD but no eMMC found; not flashing"
+    exit 0
+fi
+
+fatpart=""
+for p in "${rootdisk}p"*; do
+    [ -b "$p" ] || continue
+    if blkid "$p" 2>/dev/null | grep -q "LABEL=\"${FAT_LABEL}\""; then
+        fatpart="$p"
+        break
+    fi
+done
+[ -n "$fatpart" ] || exit 0
+
+mkdir -p "$MNT"
+mount -o ro "$fatpart" "$MNT" || exit 0
+
+if ! grep -qs '^fw_update=1' "$MNT/$CONFIG"; then
+    umount "$MNT"
+    exit 0
+fi
+
+payload=""
+for f in "$MNT"/*.wic; do
+    [ -f "$f" ] && payload="$f" && break
+done
+if [ -z "$payload" ]; then
+    log "fw_update=1 set but no .wic payload on ${fatpart}; not flashing"
+    umount "$MNT"
+    exit 0
+fi
+
+log "flashing ${payload##*/} to ${emmc} ..."
+if ! dd if="$payload" of="$emmc" bs=4M conv=fsync; then
+    log "FLASHING ${emmc} FAILED - leaving fw_update flag set"
+    umount "$MNT"
+    exit 1
+fi
+sync
+
+mount -o remount,rw "$MNT"
+sed -i 's/^fw_update=1/fw_update=0/' "$MNT/$CONFIG"
+sync
+umount "$MNT"
+
+log "Flashing complete. Please remove SD CARD!!!"
+log "Rebooting in 10 seconds; the board will boot from eMMC."
+sleep 10
+reboot
+exit 0
