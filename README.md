@@ -29,14 +29,49 @@ this layer to `conf/bblayers.conf`, then:
 MACHINE=rsb4810 bitbake core-image-minimal
 ```
 
-The resulting wic image can be written directly to the eMMC. The DDR
-init blob (TPL), TF-A (BL31) and OP-TEE come prebuilt from the
+The resulting wic image can be written to an SD card or directly to the
+eMMC. The DDR init blob (TPL), TF-A (BL31) and OP-TEE come prebuilt from the
 `rockchip-rkbin-*` recipes provided by upstream meta-rockchip; no additional
 firmware setup is needed.
 
-> **Note:** the RSB-4810 does not boot the OS directly from SD card — the
-> Advantech boot flow only uses the SD card as an *upgrade medium*. Use the
-> generated `update.img` as described below.
+## Bootable SD card image (wic)
+
+Every image build produces a bootable disk image
+`tmp/deploy/images/rsb4810/<image>.rootfs.wic` (plus a `.wic.bmap`), using
+the canonical Rockchip SD card layout from upstream meta-rockchip
+(`rockchip.wks`): GPT partition table, `idbloader.img` (TPL+SPL) as raw
+sectors at sector 64, U-Boot proper (`u-boot.itb`) at sector 16384 and the
+ext4 root filesystem (partition label `rootfsA`) at sector 32768. There is
+no FAT boot partition — the kernel fitImage and the extlinux configuration
+live in `/boot` of the root filesystem and are loaded by U-Boot's extlinux
+support.
+
+Flash it to an SD card with bmaptool (fast, recommended):
+
+```
+bmaptool copy tmp/deploy/images/rsb4810/<image>.rootfs.wic /dev/sdX
+```
+
+or with plain dd:
+
+```
+dd if=tmp/deploy/images/rsb4810/<image>.rootfs.wic of=/dev/sdX bs=4M conv=fsync
+```
+
+Board-specific notes:
+
+* **Boot order:** the RK3568 BootROM probes SPI NOR, then eMMC, then SD.
+  The board therefore boots from SD only while the eMMC bootloader area is
+  empty — on a factory board the preinstalled Advantech firmware on eMMC
+  wins. To force SD boot, erase the eMMC loader first (loader/maskrom mode
+  over USB OTG: `rkdeveloptool ef` or `upgrade_tool ef`), or use the
+  `update.img` flow below to replace the eMMC contents entirely.
+* Once SPL (loaded from SD) runs, it continues from the SD card
+  (`same-as-spl` boot order), so U-Boot, kernel and rootfs are all taken
+  from the card.
+* If both the SD card and the eMMC carry a `rootfsA` partition label,
+  extlinux's `root=PARTLABEL=rootfsA` may resolve to the eMMC partition;
+  prefer a blank/erased eMMC while validating SD boot.
 
 ## Updating the RSB-4810 (update.img)
 
@@ -72,7 +107,7 @@ Serial console: 1500000;ttyS2 (debug UART).
 | Device    | Status | Comment                                     |
 | --------- | ------ | ------------------------------------------- |
 | eMMC      | ⚠️     | Not tested                                  |
-| SD Card   | ⚠️     | Upgrade medium only (no direct OS boot)     |
+| SD Card   | ⚠️     | Boots wic image (needs empty eMMC loader), not tested |
 | ETH0      | ⚠️     | 1Gbps (GMAC0, RTL8211F PHY), not tested     |
 | ETH1      | ⚠️     | 1Gbps (GMAC1, RTL8211F PHY), not tested     |
 | USB 2.0   | ⚠️     | Not tested                                  |
