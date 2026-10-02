@@ -63,10 +63,15 @@ IMAGE_CMD:sdupdate-img () {
 
     # The RK_UPDATE partition starts at the first MiB boundary at or after
     # the end of the wic image (the wic file ends with its last partition).
-    FAT_START_B=$(( (WIC_BYTES + 1048575) / 1048576 * 1048576 ))
-    FAT_MB=$(( WIC_BYTES / 1048576 + 1 + ${RK_SDUPDATE_FAT_EXTRA_MB} ))
+    # Note: expr instead of $(( )) — BitBake's shell parser does not
+    # support POSIX arithmetic expansion.
+    FAT_START_B=$(expr \( ${WIC_BYTES} + 1048575 \) / 1048576 \* 1048576)
+    FAT_MB=$(expr ${WIC_BYTES} / 1048576 + 1 + ${RK_SDUPDATE_FAT_EXTRA_MB})
     # 1 MiB tail for the relocated backup GPT
-    TOTAL_B=$(( FAT_START_B + FAT_MB * 1048576 + 1048576 ))
+    TOTAL_B=$(expr ${FAT_START_B} + ${FAT_MB} \* 1048576 + 1048576)
+    FAT_START_MB=$(expr ${FAT_START_B} / 1048576)
+    FAT_START_S=$(expr ${FAT_START_B} / 512)
+    FAT_END_S=$(expr ${FAT_START_S} + ${FAT_MB} \* 2048 - 1)
 
     printf 'fw_update=1\n' > "${WORK}/sd_boot_config.config"
 
@@ -78,12 +83,12 @@ IMAGE_CMD:sdupdate-img () {
     cp --sparse=always "${WIC_IMG}" "${OUT_IMG}"
     truncate -s "${TOTAL_B}" "${OUT_IMG}"
     dd if="${WORK}/userdata.vfat" of="${OUT_IMG}" bs=1M \
-        seek=$(( FAT_START_B / 1048576 )) conv=notrunc,sparse status=none
+        seek="${FAT_START_MB}" conv=notrunc,sparse status=none
 
     # Relocate the backup GPT to the new end of disk and register the
     # RK_UPDATE volume as a "userdata" partition.
     sgdisk -e \
-        -n 0:$(( FAT_START_B / 512 )):$(( FAT_START_B / 512 + FAT_MB * 2048 - 1 )) \
+        -n "0:${FAT_START_S}:${FAT_END_S}" \
         -t 0:0700 -c 0:userdata "${OUT_IMG}" > /dev/null
 
     rm -rf "${WORK}"
