@@ -7,7 +7,7 @@ HOMEPAGE = "https://github.com/TinkerBoard-Android/rockchip-android-RKTools"
 # Prebuilt proprietary Rockchip tools, no license file is shipped upstream
 LICENSE = "CLOSED"
 
-SRC_URI = "git://github.com/TinkerBoard-Android/rockchip-android-RKTools;protocol=https;branch=master"
+SRC_URI = "git://github.com/TinkerBoard-Android/rockchip-android-RKTools;protocol=https;branch=android12-rockchip"
 SRCREV = "b6c0dbb389047f250fb40e11222c7aafec7e2415"
 
 S = "${UNPACKDIR}/${BP}/linux/Linux_Pack_Firmware/rockdev"
