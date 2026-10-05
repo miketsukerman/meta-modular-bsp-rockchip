@@ -64,8 +64,15 @@ Board-specific notes:
   The board therefore boots from SD only while the eMMC bootloader area is
   empty — on a factory board the preinstalled Advantech firmware on eMMC
   wins. To force SD boot, erase the eMMC loader first (loader/maskrom mode
-  over USB OTG: `rkdeveloptool ef` or `upgrade_tool ef`), or use the
-  `update.img` flow below to replace the eMMC contents entirely.
+  over USB OTG: `rkdeveloptool ef` or `upgrade_tool ef`, see below), or use
+  the `update.img` flow below to replace the eMMC contents entirely.
+* In **maskrom** mode only the BootROM answers on USB and it has no flash
+  driver: every flash command (`ef`, `ppt`, `td`, `wl`, ...) fails with
+  "Getting flash info from device failed!" until a loader is downloaded
+  into RAM first. Run `rkdeveloptool db MiniLoaderAll.bin` (deployed by
+  the build next to the images, from the `rockchip-rkbin-loader` recipe),
+  wait for the device to re-enumerate as *Loader* in `rkdeveloptool ld`,
+  then run `rkdeveloptool ef` (or `wl 0 <image>.wic` to flash directly).
 * Once SPL (loaded from SD) runs, it continues from the SD card
   (`same-as-spl` boot order), so U-Boot, kernel and rootfs are all taken
   from the card.
@@ -120,7 +127,8 @@ Notes:
 
 * **Triggering SD boot:** the RK3568 BootROM prefers the eMMC. On a board
   with a working eMMC loader, erase it once (loader/maskrom mode over USB
-  OTG: `rkdeveloptool ef` or `upgrade_tool ef`) or hold the recovery
+  OTG: `rkdeveloptool db MiniLoaderAll.bin` then `rkdeveloptool ef`, or
+  `upgrade_tool ef`) or hold the recovery
   button so the BootROM falls through to the SD card. A board with a
   blank/bricked eMMC boots the upgrade card directly.
 * The vendor SDDiskTool card format itself (RC4-encoded legacy IDBlock at
