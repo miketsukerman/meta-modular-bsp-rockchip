@@ -71,8 +71,12 @@ Board-specific notes:
   "Getting flash info from device failed!" until a loader is downloaded
   into RAM first. Run `rkdeveloptool db MiniLoaderAll.bin` (deployed by
   the build next to the images, from the `rockchip-rkbin-loader` recipe),
-  wait for the device to re-enumerate as *Loader* in `rkdeveloptool ld`,
   then run `rkdeveloptool ef` (or `wl 0 <image>.wic` to flash directly).
+  Note: on RK356x the loader's usbplug stage keeps the maskrom USB
+  protocol, so `rkdeveloptool ld` still reports *Maskrom* after a
+  successful `db` — that is expected, just proceed with the flash
+  command. The usbplug state is lost on any USB replug/power-cycle;
+  re-run `db` right before flashing if in doubt.
 * Once SPL (loaded from SD) runs, it continues from the SD card
   (`same-as-spl` boot order), so U-Boot, kernel and rootfs are all taken
   from the card.
