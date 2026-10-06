@@ -1,0 +1,22 @@
+#!/bin/sh
+### BEGIN INIT INFO
+# Provides:          rockchip-sd-installer
+# Required-Start:    $local_fs
+# Required-Stop:
+# Default-Start:     2 3 4 5
+# Default-Stop:
+# Short-Description: Flash eMMC from a Rockchip SD upgrade card
+### END INIT INFO
+
+case "$1" in
+    start)
+        /usr/sbin/rockchip-sd-installer &
+        ;;
+    stop|restart|reload|force-reload|status)
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart|status}"
+        exit 1
+        ;;
+esac
+exit 0
