@@ -178,12 +178,12 @@ terminal.
 
 | Device    | Status | Comment                                     |
 | --------- | ------ | ------------------------------------------- |
-| eMMC      | ⚠️     | Not tested                                  |
+| eMMC      | ✅     | Boots flashed image                          |
 | SD Card   | ⚠️     | Boots wic image (needs empty eMMC loader), not tested |
-| ETH0      | ⚠️     | 1Gbps (GMAC0, RTL8211F PHY), not tested     |
-| ETH1      | ⚠️     | 1Gbps (GMAC1, RTL8211F PHY), not tested     |
-| USB 2.0   | ⚠️     | Not tested                                  |
-| USB 3.0   | ⚠️     | Not tested                                  |
+| ETH0      | ⚠️     | 1Gbps (GMAC0, RTL8211F PHY); driver now built-in (rsb4810-eth-usb.cfg), retest |
+| ETH1      | ⚠️     | 1Gbps (GMAC1, RTL8211F PHY); driver now built-in (rsb4810-eth-usb.cfg), retest |
+| USB 2.0   | ⚠️     | Combo-PHY driver now built-in (rsb4810-eth-usb.cfg), retest |
+| USB 3.0   | ⚠️     | Combo-PHY driver now built-in (rsb4810-eth-usb.cfg), retest |
 | HDMI      | ⚠️     | Not tested                                  |
 | LVDS/eDP  | ❌     | Needs porting from the vendor kernel        |
 | PCIe/M.2  | ⚠️     | Not tested                                  |
