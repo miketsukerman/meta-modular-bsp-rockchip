@@ -26,6 +26,17 @@ PACKAGE_ARCH = "${MACHINE_ARCH}"
 RKBIN_LOADER_INI ?= ""
 RKBIN_LOADER_INI:rk3568 = "RKBOOT/RK3568MINIALL.ini"
 
+# Chip name understood by rkbin's tools/ddrbin_tool.py
+RKBIN_DDRBIN_CHIP ?= ""
+RKBIN_DDRBIN_CHIP:rk3568 = "rk3568"
+
+# Debug UART baud rate of the loader's DDR init blob. The Rockchip blobs
+# default to 1500000; set e.g. "115200" for USB-UART adapters that cannot
+# generate an accurate 1.5 MBd. Leave empty to keep the blob default.
+# Note: this only changes the miniloader (DDR banner/training) output;
+# U-Boot proper and the kernel keep their own console baud rate.
+RKBIN_UART_BAUDRATE ?= ""
+
 # NOTE: rkbin's boot_merger is a prebuilt static x86-64 binary; this recipe
 # can only be built on an x86-64 build host.
 do_compile() {
@@ -33,6 +44,21 @@ do_compile() {
 		bbfatal "Non-empty RKBIN_LOADER_INI:<MACHINE> required!"
 	fi
 	cd "${S}"
+	if [ -n "${RKBIN_UART_BAUDRATE}" ]; then
+		if [ -z "${RKBIN_DDRBIN_CHIP}" ]; then
+			bbfatal "RKBIN_UART_BAUDRATE set but RKBIN_DDRBIN_CHIP is empty"
+		fi
+		sed -e 's/^uart baudrate=.*/uart baudrate=${RKBIN_UART_BAUDRATE}/' \
+			tools/ddrbin_param.txt > "${WORKDIR}/ddrbin_param_baud.txt"
+		# Patch every DDR blob the ini references: Path1 under
+		# [CODE471_OPTION] (the CODE472 Path1 is the usbplug, not DDR)
+		# and the FlashData loader entry
+		awk -F= '/^\[/{s=$0} s=="[CODE471_OPTION]" && /^Path1=/{print $2} /^FlashData=/{print $2}' \
+			"${RKBIN_LOADER_INI}" | tr -d '\r' | sort -u | while read -r DDRBIN; do
+			python3 tools/ddrbin_tool.py "${RKBIN_DDRBIN_CHIP}" \
+				"${WORKDIR}/ddrbin_param_baud.txt" "${DDRBIN}"
+		done
+	fi
 	./tools/boot_merger "${RKBIN_LOADER_INI}"
 }
 
