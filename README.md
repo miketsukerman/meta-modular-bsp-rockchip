@@ -158,12 +158,23 @@ The three build artifacts at a glance:
 using the mainline-based `linux-yocto` kernel and mainline U-Boot
 (`evb-rk3568_defconfig` with the RSB-4810 devicetree).
 
-Serial console: 1500000;ttyS2 (debug UART). The maskrom/update miniloader
-(`MiniLoaderAll.bin`) is rebuilt with its DDR-blob debug output at 115200
-(`RKBIN_UART_BAUDRATE` in `conf/machine/rsb4810.conf`, applied with rkbin's
-`ddrbin_tool`), so loader banners are readable on USB-UART adapters that
-cannot generate an accurate 1.5 MBd; U-Boot and the kernel console remain
-at 1500000.
+Serial console: **115200;ttyS2** (debug UART). The whole stack runs at
+115200 instead of the Rockchip-default 1.5 MBd, because many USB-UART
+adapters (classic CP2102, older PL2303) cannot generate an accurate
+1500000 baud:
+
+* miniloader DDR blob — `RKBIN_UART_BAUDRATE` in `conf/machine/rsb4810.conf`,
+  applied with rkbin's `ddrbin_tool` (rockchip-rkbin-loader recipe);
+* U-Boot — `baudrate-115200.cfg` fragment (`CONFIG_BAUDRATE=115200`) in
+  `recipes-bsp/u-boot/u-boot/rsb4810.inc`;
+* kernel `console=`/getty — `SERIAL_CONSOLES = "115200;ttyS2"` (upstream
+  `rockchip-extlinux.inc` derives the extlinux console args from it);
+* devicetree `stdout-path = "serial2:115200n8"` (earlycon) in both the
+  kernel and U-Boot copies of `rk3568-rsb4810.dts`.
+
+To return to the stock 1500000 rate, revert these four spots together —
+a mixed-rate stack means garbage from whichever stage disagrees with the
+terminal.
 
 | Device    | Status | Comment                                     |
 | --------- | ------ | ------------------------------------------- |
@@ -177,7 +188,7 @@ at 1500000.
 | LVDS/eDP  | ❌     | Needs porting from the vendor kernel        |
 | PCIe/M.2  | ⚠️     | Not tested                                  |
 | Mini-PCIe | ⚠️     | Not tested                                  |
-| UART      | ⚠️     | Debug console expected on ttyS2 @ 1500000   |
+| UART      | ⚠️     | Debug console on ttyS2 @ 115200 (whole stack) |
 | I2C       | ⚠️     | Not tested                                  |
 | CAN       | ❌     | Needs porting from the vendor kernel        |
 | RTC       | ❌     | External RTC needs porting                  |
