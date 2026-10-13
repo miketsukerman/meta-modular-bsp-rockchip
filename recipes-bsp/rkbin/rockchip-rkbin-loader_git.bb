@@ -4,11 +4,12 @@ with boot_merger. The miniloader (DDR init + usbplug + SPL) is the \
 'bootloader' entry of a Rockchip update.img and is what the BootROM runs in \
 SD-upgrade or USB (maskrom/loader) mode to flash the eMMC."
 
-# Same source pin as the rockchip-rkbin-* recipes in upstream meta-rockchip
+# Newer than the rockchip-rkbin-* pin in upstream meta-rockchip: rkbin
+# master ships rk3568_ddr_1560MHz_v1.26.bin (eMMC init fixes over v1.23)
 SRC_URI = "git://github.com/rockchip-linux/rkbin;protocol=https;branch=master"
-SRCREV = "f43a462e7a1429a9d407ae52b4745033034a6cf9"
+SRCREV = "3e288fe814e059dd06833495f845cab04ac20a5c"
 LICENSE = "Proprietary"
-LIC_FILES_CHKSUM = "file://LICENSE;md5=11e3673115959bf596feaaa6ea7ce9a5"
+LIC_FILES_CHKSUM = "file://LICENSE;md5=e1d83c54b4e0b5e550769dd04f092f6c"
 
 S = "${UNPACKDIR}/${BP}"
 
