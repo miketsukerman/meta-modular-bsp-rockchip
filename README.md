@@ -158,7 +158,12 @@ The three build artifacts at a glance:
 using the mainline-based `linux-yocto` kernel and mainline U-Boot
 (`evb-rk3568_defconfig` with the RSB-4810 devicetree).
 
-Serial console: 1500000;ttyS2 (debug UART).
+Serial console: 1500000;ttyS2 (debug UART). The maskrom/update miniloader
+(`MiniLoaderAll.bin`) is rebuilt with its DDR-blob debug output at 115200
+(`RKBIN_UART_BAUDRATE` in `conf/machine/rsb4810.conf`, applied with rkbin's
+`ddrbin_tool`), so loader banners are readable on USB-UART adapters that
+cannot generate an accurate 1.5 MBd; U-Boot and the kernel console remain
+at 1500000.
 
 | Device    | Status | Comment                                     |
 | --------- | ------ | ------------------------------------------- |
