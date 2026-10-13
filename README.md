@@ -176,6 +176,13 @@ To return to the stock 1500000 rate, revert these four spots together —
 a mixed-rate stack means garbage from whichever stage disagrees with the
 terminal.
 
+The systemd `osc-context` feature (systemd ≥ 257,
+`/etc/profile.d/80-systemd-osc-context.sh`) is disabled for this machine
+(`recipes-core/systemd/systemd_%.bbappend`): it makes bash wrap every
+prompt/command in OSC 3008 escape sequences
+(`3008;start=…;machineid=…;bootid=…`) that minicom/picocom print as
+literal garbage on the serial console.
+
 | Device    | Status | Comment                                     |
 | --------- | ------ | ------------------------------------------- |
 | eMMC      | ✅     | Boots flashed image                          |
