@@ -191,7 +191,7 @@ literal garbage on the serial console.
 | ETH1      | ⚠️     | 1Gbps (GMAC1, RTL8211F PHY); driver now built-in (rsb4810-eth-usb.cfg), retest |
 | USB 2.0   | ⚠️     | Combo-PHY driver now built-in (rsb4810-eth-usb.cfg), retest |
 | USB 3.0   | ⚠️     | Combo-PHY driver now built-in (rsb4810-eth-usb.cfg), retest |
-| HDMI      | ⚠️     | Not tested                                  |
+| HDMI      | ⚠️     | Not tested; X11 images need XSERVER:remove = "xserver-xorg-xvfb" (in rsb4810.conf) |
 | LVDS/eDP  | ❌     | Needs porting from the vendor kernel        |
 | PCIe/M.2  | ⚠️     | Not tested                                  |
 | Mini-PCIe | ⚠️     | Not tested                                  |
