@@ -11,6 +11,7 @@ The following boards are supported by this layer:
 Preliminary support:
 
 * RSB-4810 (MACHINE=`rsb4810` Rockchip RK3568)
+* AOM-6881 + SOM-DB2510-R0A1 (MACHINE=`aom6881` Rockchip RK3588)
 
 ## Dependencies
 
@@ -28,6 +29,8 @@ this layer to `conf/bblayers.conf`, then:
 ```
 MACHINE=rsb4810 bitbake core-image-minimal
 ```
+
+(or `MACHINE=aom6881` for the AOM-6881 on SOM-DB2510).
 
 The resulting wic image can be written to an SD card or directly to the
 eMMC. The DDR init blob (TPL), TF-A (BL31) and OP-TEE come prebuilt from the
@@ -204,6 +207,53 @@ literal garbage on the serial console.
 
 Legend: ✅ working, ⚠️ untested/partial, ❌ not yet supported.
 
+## AOM-6881 + SOM-DB2510
+
+SMARC 2.1 module based on the Rockchip RK3588 (quad Cortex-A76 + quad
+Cortex-A55) on the Advantech SOM-DB2510-R0A1 carrier board, using the
+mainline-based `linux-yocto` kernel and mainline U-Boot
+(`evb-rk3588_defconfig` with the AOM-6881 devicetree). The module follows
+the Rockchip RK3588 EVB1 reference design (dual RK806 PMIC on SPI2,
+RTL8211F RGMII PHYs), so the devicetree is derived from the mainline
+`rk3588-evb1-v10.dts` with board values (GMAC delays, PHY addresses) from
+the Advantech ROM-6881 vendor BSP.
+
+All the image artifacts and flashing flows described above for the
+RSB-4810 apply unchanged (replace `rsb4810` with `aom6881` in the paths):
+bootable wic image, `update.img` for `upgrade_tool`/`rkdeveloptool` over
+USB OTG (the `rkdeveloptool db MiniLoaderAll.bin` first step in maskrom
+mode applies to the RK3588 as well — the RK3588 miniloader comes from
+rkbin's `RKBOOT/RK3588MINIALL.ini`), and the self-flashing SD upgrade
+card. Like the RK3568, the RK3588 BootROM prefers the eMMC, so SD boot
+needs an empty/erased eMMC loader area.
+
+Serial console: **115200;ttyS2** (debug UART, UART2), the same
+whole-stack 115200 setup as the RSB-4810 (miniloader DDR blob via
+`RKBIN_UART_BAUDRATE`, U-Boot `baudrate-115200.cfg`, `SERIAL_CONSOLES`,
+devicetree `stdout-path = "serial2:115200n8"`); the systemd `osc-context`
+feature is disabled for this machine too.
+
+| Device    | Status | Comment                                     |
+| --------- | ------ | ------------------------------------------- |
+| eMMC      | ⚠️     | Not tested                                  |
+| SD Card   | ⚠️     | Not tested (needs empty eMMC loader)        |
+| ETH0      | ⚠️     | 1Gbps (GMAC0, RTL8211F PHY); driver built-in (aom6881-eth-usb.cfg), not tested |
+| ETH1      | ⚠️     | 1Gbps (GMAC1, RTL8211F PHY); driver built-in (aom6881-eth-usb.cfg), not tested |
+| USB 2.0   | ⚠️     | Not tested; VBUS enable GPIOs unknown (regulators modelled always-on) |
+| USB 3.0   | ⚠️     | USBDP/combo PHY drivers built-in (aom6881-eth-usb.cfg), not tested |
+| USB OTG   | ⚠️     | Runs in host mode; Type-C PD (FUSB302) hookup needs the vendor schematic |
+| HDMI/DP   | ❌     | Display output needs porting                 |
+| eDP/LVDS  | ❌     | Needs porting from the vendor kernel        |
+| PCIe/M.2  | ❌     | Carrier PCIe slots need porting (reset/power GPIOs unknown) |
+| SATA      | ❌     | Not wired up yet                            |
+| UART      | ⚠️     | Debug console on ttyS2 @ 115200 (whole stack) |
+| I2C       | ⚠️     | Not tested                                  |
+| CAN       | ❌     | Likely Advantech USB SLCAN-FD MCU, needs porting |
+| RTC       | ⚠️     | HYM8563 on I2C6 (EVB1 reference wiring), not tested |
+| Watchdog  | ⚠️     | Internal watchdog, not tested               |
+
+Legend: ✅ working, ⚠️ untested/partial, ❌ not yet supported.
+
 ## Layer structure
 
 ```
@@ -211,6 +261,8 @@ classes/rockchip-update-img.bbclass    Rockchip update.img image type (eMMC upgr
 classes/rockchip-sdupdate-img.bbclass  SD upgrade card image type (wic + RK_UPDATE volume)
 conf/machine/rsb4810.conf              machine configuration (thin, on top of
                                        meta-rockchip's conf/machine/include/rk3568.inc)
+conf/machine/aom6881.conf              machine configuration (thin, on top of
+                                       meta-rockchip's conf/machine/include/rk3588.inc)
 recipes-bsp/rkbin/                     Rockchip miniloader (MiniLoaderAll.bin via boot_merger)
 recipes-bsp/rockchip-pack-tools/       native afptool/rkImageMaker packaging tools
 recipes-bsp/rockchip-sd-installer/     boot service flashing the eMMC from an SD upgrade card
