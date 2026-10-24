@@ -7,3 +7,4 @@
 # PACKAGECONFIG by default; drop it so the profile.d script and its
 # tmpfiles.d activation snippet are removed from the image.
 PACKAGECONFIG:remove:rsb4810 = "osc-context"
+PACKAGECONFIG:remove:aom6881 = "osc-context"

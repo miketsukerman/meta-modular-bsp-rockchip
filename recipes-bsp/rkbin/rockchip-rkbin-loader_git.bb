@@ -19,16 +19,19 @@ INHIBIT_DEFAULT_DEPS = "1"
 
 COMPATIBLE_MACHINE = "^$"
 COMPATIBLE_MACHINE:rk3568 = "rk3568"
+COMPATIBLE_MACHINE:rk3588 = "rk3588"
 
 PACKAGE_ARCH = "${MACHINE_ARCH}"
 
 # boot_merger ini describing the DDR blob and SPL that make up the miniloader
 RKBIN_LOADER_INI ?= ""
 RKBIN_LOADER_INI:rk3568 = "RKBOOT/RK3568MINIALL.ini"
+RKBIN_LOADER_INI:rk3588 = "RKBOOT/RK3588MINIALL.ini"
 
 # Chip name understood by rkbin's tools/ddrbin_tool.py
 RKBIN_DDRBIN_CHIP ?= ""
 RKBIN_DDRBIN_CHIP:rk3568 = "rk3568"
+RKBIN_DDRBIN_CHIP:rk3588 = "rk3588"
 
 # Debug UART baud rate of the loader's DDR init blob. The Rockchip blobs
 # default to 1500000; set e.g. "115200" for USB-UART adapters that cannot
