@@ -14,3 +14,4 @@ do_configure:prepend() {
     cp "${UNPACKDIR}/dts/upstream/src/arm64/rockchip/rk3568-rsb4810.dts" \
         "${S}/dts/upstream/src/arm64/rockchip/rk3568-evb1-v10.dts"
 }
+
