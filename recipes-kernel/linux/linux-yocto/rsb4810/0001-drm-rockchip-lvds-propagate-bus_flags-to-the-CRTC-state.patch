@@ -1,0 +1,63 @@
+From git@z Thu Jan  1 00:00:00 1970
+Subject: [PATCH v2 1/4] drm/rockchip: lvds: propagate bus_flags to the CRTC
+ state
+From: Rok Markovic <rok@kanardia.eu>
+Date: Fri, 24 Jul 2026 10:08:21 +0200
+Message-Id: <20260724080824.115260-2-rok@kanardia.eu>
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 7bit
+
+rockchip_lvds_encoder_atomic_check() sets output_mode and output_type
+but never copies the connector's bus_flags into the Rockchip CRTC
+state, unlike dw_dp-rockchip.c and dw-mipi-dsi2-rockchip.c which both
+do.
+
+panel-lvds parses pixelclk-active from the DT display timing and
+publishes it on the connector as DRM_BUS_FLAG_PIXDATA_DRIVE_NEGEDGE.
+VOP2 reads that flag back out of the CRTC state to decide
+POLFLAG_DCLK_INV. With the flag dropped here, vcstate->bus_flags is
+always zero, so a panel that asks to be clocked on the falling edge is
+driven on the rising one, and there is no way to express the panel's
+requirement from DT at all.
+
+No functional change for the SoCs currently supported by this driver:
+rk3288 and px30 pair with the VOP1 driver (rockchip_drm_vop.c), which
+never reads bus_flags - only VOP2 consumes it. The flag becomes live
+with the RK3568 support added later in this series.
+
+Upstream-Status: Submitted [https://lore.kernel.org/all/20260724080824.115260-2-rok@kanardia.eu/]
+
+Signed-off-by: Rok Markovic <rok@kanardia.eu>
+Assisted-by: Claude:claude-opus-4-8
+Reviewed-by: Chaoyi Chen <chaoyi.chen@rock-chips.com>
+---
+No changes since v1.
+
+ drivers/gpu/drm/rockchip/rockchip_lvds.c | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/rockchip/rockchip_lvds.c b/drivers/gpu/drm/rockchip/rockchip_lvds.c
+index 75f898a..95fa0a9 100644
+--- a/drivers/gpu/drm/rockchip/rockchip_lvds.c
++++ b/drivers/gpu/drm/rockchip/rockchip_lvds.c
+@@ -129,7 +129,15 @@ rockchip_lvds_encoder_atomic_check(struct drm_encoder *encoder,
+ 				   struct drm_connector_state *conn_state)
+ {
+ 	struct rockchip_crtc_state *s = to_rockchip_crtc_state(crtc_state);
+-
++	struct drm_connector *connector = conn_state->connector;
++
++	/*
++	 * The VOP derives the pixel clock polarity from this. Without it a
++	 * panel that declares pixelclk-active = <0> is clocked on the wrong
++	 * edge. panel-lvds fills the connector's bus_flags in from the DT
++	 * display timing.
++	 */
++	s->bus_flags = connector->display_info.bus_flags;
+ 	s->output_mode = ROCKCHIP_OUT_MODE_P888;
+ 	s->output_type = DRM_MODE_CONNECTOR_LVDS;
+ 
+-- 
+2.43.0
+
