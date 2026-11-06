@@ -3,6 +3,7 @@ require common/realtek-phy.inc
 SRC_URI += " \
     file://rk3568-rsb4810.dts;subdir=arch/arm64/boot/dts/rockchip \
     file://rsb4810-eth-usb.cfg \
+    file://rsb4810-lvds.cfg \
 "
 
 # RK3568 LVDS transmitter support (not in mainline): out-of-tree series
