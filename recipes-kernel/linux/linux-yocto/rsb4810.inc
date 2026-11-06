@@ -2,6 +2,7 @@ require common/realtek-phy.inc
 
 SRC_URI += " \
     file://rk3568-rsb4810.dts;subdir=arch/arm64/boot/dts/rockchip \
+    file://rk3568-rsb4810-lvds.dtso;subdir=arch/arm64/boot/dts/rockchip \
     file://rsb4810-eth-usb.cfg \
     file://rsb4810-lvds.cfg \
 "
@@ -37,8 +38,15 @@ do_patch[prefuncs] += "rsb4810_check_lvds_patches"
 
 do_configure:prepend() {
     cp "${UNPACKDIR}/arch/arm64/boot/dts/rockchip/rk3568-rsb4810.dts" \
+        "${UNPACKDIR}/arch/arm64/boot/dts/rockchip/rk3568-rsb4810-lvds.dtso" \
         "${S}/arch/arm64/boot/dts/rockchip/"
 
+    # The base DTB is built with symbols (-@) so that U-Boot can apply
+    # overlays such as rk3568-rsb4810-lvds.dtbo on top of it.
     echo 'dtb-$(CONFIG_ARCH_ROCKCHIP) += rk3568-rsb4810.dtb' >> \
+        "${S}/arch/arm64/boot/dts/rockchip/Makefile"
+    echo 'DTC_FLAGS_rk3568-rsb4810 := -@' >> \
+        "${S}/arch/arm64/boot/dts/rockchip/Makefile"
+    echo 'dtb-$(CONFIG_ARCH_ROCKCHIP) += rk3568-rsb4810-lvds.dtbo' >> \
         "${S}/arch/arm64/boot/dts/rockchip/Makefile"
 }
