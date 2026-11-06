@@ -223,11 +223,14 @@ driven by VOP2 video port 1 (vp0 drives HDMI, vp2 has a known bug).
 > `b4 am 20260724080824.115260-1-rok@kanardia.eu` and replace them first
 > (instructions are in the placeholder files).
 
-The panel description in the overlay (compatible, size, `data-mapping`,
-`panel-timing`) contains placeholder values marked `TODO` — fill them in
-from the panel datasheet before use. The backlight enable GPIO
-(`LVDS_BLENH`, assumed GPIO0_A0) also still needs to be verified on
-hardware.
+The overlay is set up for the Advantech IDK-1107WR-40WVA1E kit (AUO
+G070VW01 V0, 7" 800x480, listed as `lvds-g070vw01` in Advantech's
+RSB-4810 BSP), with the timings from Advantech's Rockchip vendor kernel.
+Still to be verified on hardware (marked `TODO` in the overlay): the
+backlight enable GPIO (`LVDS_BLENH`, assumed GPIO0_A0), the panel size,
+and LCD_EN/LCD_RST_L on GPIO3_C6/C7 — these two pins are also SDMMC2 D0/D1,
+which the base devicetree uses for the M.2 Wi-Fi SDIO, so with the overlay
+enabled `fe000000.mmc` fails with a pin conflict.
 
 **Enabling the overlay.** `rk3568-rsb4810-lvds.dtbo` is built with the
 kernel, deployed next to the DTB and packed into the fitImage. The boot
@@ -246,11 +249,22 @@ error is printed and the board boots with the plain devicetree. Use
 `setenv overlays; saveenv` to disable it again.
 
 **Jumpers.** The panel and backlight supply voltages are selected by
-jumpers only, there is no software control. Set them to match the panel
-before connecting it:
+jumpers only, there is no software control (see the
+[Advantech jumper list](https://docs.aim-linux.advantech.com/docs/processors/rockchip/RK3568/RSB-4810_wiki_data/RSB-4810_Debian11_User_Guide)).
+Set them to match the panel before connecting it:
 
-* `VDD2` — panel logic supply (VDD_LVDS), 3.3 V or 5 V;
-* `BLP1` — backlight supply, 5 V or 12 V.
+| Jumper | Function                         | Settings                          |
+| ------ | -------------------------------- | --------------------------------- |
+| `VDD2` | LVDS panel VDD (`VDD_LVDS`)      | 1-2: 3.3 V (default), 2-3: 5 V    |
+| `BLP1` | LVDS backlight power, 3.3/5 V    | 1-2: 5 V (default), 2-3: 3.3 V    |
+| `BLP2` | LVDS backlight power, 12 V       | 1-2: 12 V                         |
+
+The G070VW01 V0 needs 3.3 V VDD (`VDD2` 1-2) and a 12 V backlight
+supply (`BLP2` fitted). Check on the schematic, or measure `+VDD_BKLT` on
+pin 1 of the `BL` connector, how `BLP1` must be set while `BLP2` is
+fitted. The backlight cable goes to the 5-pin `BL` connector (pin 1
+`+VDD_BKLT`, 2 GND, 3 `LVDS_BLEN`, 4 `LVDS_PWM`, 5 +5 V), the LVDS
+pairs to the 40-pin `LVDS` connector.
 
 **Testing.** `modetest` (from `libdrm-tests`) and `kmscube` come with
 `packagegroup-advantech-display-test` (in core-image-base and up, see
@@ -274,12 +288,14 @@ rockchip -p`).
   VOP2 **vp1** (`&vp1` endpoint in the overlay, CRTC used in `modetest`),
   then check `data-mapping` (`vesa-24` / `jeida-24` / `jeida-18`) against
   the panel datasheet — a wrong mapping usually gives a black or garbled
-  picture. Also check the timings and that `VDD2` matches the panel.
+  picture. Also check the timings and that `VDD2` matches the panel, and
+  measure `VDD_LVDS` on the 40-pin connector (pins 1/2/5/6/40): 0 V means
+  LCD_EN is not on GPIO3_C6.
 * *Backlight off:* test the enable GPIO and the PWM independently, e.g.
   with the overlay disabled: `gpioset` on GPIO0_A0 (`gpiochip0` line 0;
   confirm with `gpioinfo`, the pin assignment is still unverified) and
   PWM4 via `/sys/class/pwm` (export channel 0, set `period` 25000,
-  `duty_cycle`, `enable` 1). Check that `BLP1` matches the backlight
+  `duty_cycle`, `enable` 1). Check that `BLP1`/`BLP2` match the backlight
   voltage.
 
 ## AOM-6881 + SOM-DB2510
