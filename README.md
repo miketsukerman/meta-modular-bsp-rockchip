@@ -195,7 +195,8 @@ literal garbage on the serial console.
 | USB 2.0   | ⚠️     | Combo-PHY driver now built-in (rsb4810-eth-usb.cfg), retest |
 | USB 3.0   | ⚠️     | Combo-PHY driver now built-in (rsb4810-eth-usb.cfg), retest |
 | HDMI      | ⚠️     | Not tested; X11 images need XSERVER:remove = "xserver-xorg-xvfb" (in rsb4810.conf) |
-| LVDS/eDP  | ❌     | Needs porting from the vendor kernel        |
+| LVDS      | ⚠️     | LVDS0 via out-of-tree patches + `lvds` overlay, not tested (see [LVDS panel](#rsb-4810-lvds-panel)) |
+| eDP       | ❌     | Needs porting from the vendor kernel        |
 | PCIe/M.2  | ⚠️     | Not tested                                  |
 | Mini-PCIe | ⚠️     | Not tested                                  |
 | UART      | ⚠️     | Debug console on ttyS2 @ 115200 (whole stack) |
@@ -206,6 +207,80 @@ literal garbage on the serial console.
 | Wi-Fi/BT  | ❌     | M.2 module firmware packaging needed        |
 
 Legend: ✅ working, ⚠️ untested/partial, ❌ not yet supported.
+
+### RSB-4810 LVDS panel
+
+The RK3568 LVDS transmitter is not supported by mainline Linux. This layer
+carries the out-of-tree series "drm/rockchip: add RK3568 LVDS support"
+(Rok Markovic, Message-ID `20260724080824.115260-1-rok@kanardia.eu`) as
+`recipes-kernel/linux/linux-yocto/rsb4810/000[1-4]-*.patch`, the
+`rsb4810-lvds.cfg` kernel config fragment and the devicetree overlay
+`rk3568-rsb4810-lvds.dtso`. Limitations: single-channel LVDS0 only,
+driven by VOP2 video port 1 (vp0 drives HDMI, vp2 has a known bug).
+
+> **Note:** if the patch files still start with `RSB4810-LVDS-PLACEHOLDER`,
+> the kernel build stops in `do_patch`; fetch the series with
+> `b4 am 20260724080824.115260-1-rok@kanardia.eu` and replace them first
+> (instructions are in the placeholder files).
+
+The panel description in the overlay (compatible, size, `data-mapping`,
+`panel-timing`) contains placeholder values marked `TODO` — fill them in
+from the panel datasheet before use. The backlight enable GPIO
+(`LVDS_BLENH`, assumed GPIO0_A0) also still needs to be verified on
+hardware.
+
+**Enabling the overlay.** `rk3568-rsb4810-lvds.dtbo` is built with the
+kernel, deployed next to the DTB and packed into the fitImage. The boot
+script applies overlays listed in the U-Boot variable `overlays` (unset by
+default, so HDMI-only setups are unaffected). At the U-Boot prompt:
+
+```
+setenv overlays lvds
+saveenv
+boot
+```
+
+The boot log then shows `Applied devicetree overlay
+rk3568-rsb4810-lvds.dtbo`. If extracting or applying an overlay fails, an
+error is printed and the board boots with the plain devicetree. Use
+`setenv overlays; saveenv` to disable it again.
+
+**Jumpers.** The panel and backlight supply voltages are selected by
+jumpers only, there is no software control. Set them to match the panel
+before connecting it:
+
+* `VDD2` — panel logic supply (VDD_LVDS), 3.3 V or 5 V;
+* `BLP1` — backlight supply, 5 V or 12 V.
+
+**Testing.** `modetest` (from `libdrm-tests`) and `kmscube` come with
+`packagegroup-advantech-display-test` (in core-image-base and up, see
+`conf/machine/rsb4810.conf`):
+
+```sh
+dmesg | grep -iE 'lvds|vop2|dsidphy|panel'
+cat /sys/class/drm/card*-LVDS-1/status
+modetest -M rockchip -c
+modetest -M rockchip -s <conn_id>@<crtc_id>:<WxH> -v
+echo 255 > /sys/class/backlight/backlight-lvds/brightness
+```
+
+Take `<conn_id>` from the LVDS connector line of `modetest -M rockchip
+-c` and `<crtc_id>` from the CRTC belonging to VOP2 vp1 (`modetest -M
+rockchip -p`).
+
+**Troubleshooting.**
+
+* *Backlight on, screen black:* check that the LVDS encoder is fed by
+  VOP2 **vp1** (`&vp1` endpoint in the overlay, CRTC used in `modetest`),
+  then check `data-mapping` (`vesa-24` / `jeida-24` / `jeida-18`) against
+  the panel datasheet — a wrong mapping usually gives a black or garbled
+  picture. Also check the timings and that `VDD2` matches the panel.
+* *Backlight off:* test the enable GPIO and the PWM independently, e.g.
+  with the overlay disabled: `gpioset` on GPIO0_A0 (`gpiochip0` line 0;
+  confirm with `gpioinfo`, the pin assignment is still unverified) and
+  PWM4 via `/sys/class/pwm` (export channel 0, set `period` 25000,
+  `duty_cycle`, `enable` 1). Check that `BLP1` matches the backlight
+  voltage.
 
 ## AOM-6881 + SOM-DB2510
 
@@ -267,9 +342,10 @@ recipes-bsp/rkbin/                     Rockchip miniloader (MiniLoaderAll.bin vi
 recipes-bsp/rockchip-pack-tools/       native afptool/rkImageMaker packaging tools
 recipes-bsp/rockchip-sd-installer/     boot service flashing the eMMC from an SD upgrade card
 recipes-bsp/u-boot/                    U-Boot board integration (per-machine .inc + files)
+recipes-graphics/packagegroups/        display test tools (modetest, kmscube)
 recipes-kernel/linux/                  kernel board integration:
   linux-yocto/<machine>.inc            per-machine devicetree/config wiring
-  linux-yocto/<machine>/               board devicetree sources
+  linux-yocto/<machine>/               board devicetree sources, overlays, patches
   linux-yocto/common/                  shared kernel config fragments
 ```
 
