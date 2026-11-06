@@ -1,0 +1,22 @@
+RSB4810-LVDS-PLACEHOLDER
+
+This file is a placeholder for patch 2/4 of the out-of-tree series
+
+  [PATCH v2 0/4] drm/rockchip: add RK3568 LVDS support
+  Author:     Rok Markovic <rok@kanardia.eu>
+  Message-ID: 20260724080824.115260-1-rok@kanardia.eu
+
+  [PATCH v2 2/4] dt-bindings: display: rockchip,lvds: add RK3568
+
+The real patch could not be downloaded when this layer change was made.
+Replace this file with the real patch (same file name), e.g.:
+
+  b4 am -o /tmp/rk3568-lvds 20260724080824.115260-1-rok@kanardia.eu
+  cd <linux-yocto v6.18 tree>
+  git am -3 /tmp/rk3568-lvds/*.mbx      # rebase here if a hunk fails
+  git format-patch -4 -o /tmp/rk3568-lvds/out
+  # then copy the four patches over the placeholders in
+  # recipes-kernel/linux/linux-yocto/rsb4810/ keeping these file names
+
+The kernel build stops in do_patch with an explanatory error as long as
+any placeholder is still present (see linux-yocto/rsb4810.inc).
