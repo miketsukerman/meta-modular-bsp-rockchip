@@ -211,31 +211,36 @@ Legend: ✅ working, ⚠️ untested/partial, ❌ not yet supported.
 ### RSB-4810 LVDS panel
 
 The RK3568 LVDS transmitter is not supported by mainline Linux. This layer
-carries the out-of-tree series "drm/rockchip: add RK3568 LVDS support"
-(Rok Markovic, Message-ID `20260724080824.115260-1-rok@kanardia.eu`) as
-`recipes-kernel/linux/linux-yocto/rsb4810/000[1-4]-*.patch`, the
+carries the series "drm/rockchip: add RK3568 LVDS support" by Rok Markovic
+([lore](https://lore.kernel.org/all/20260724080824.115260-1-rok@kanardia.eu/),
+submitted upstream) as
+`recipes-kernel/linux/linux-yocto/rsb4810/000[1-4]-*.patch`, plus the
 `rsb4810-lvds.cfg` kernel config fragment and the devicetree overlay
 `rk3568-rsb4810-lvds.dtso`. Limitations: single-channel LVDS0 only,
 driven by VOP2 video port 1 (vp0 drives HDMI, vp2 has a known bug).
 
-> **Note:** if the patch files still start with `RSB4810-LVDS-PLACEHOLDER`,
-> the kernel build stops in `do_patch`; fetch the series with
-> `b4 am 20260724080824.115260-1-rok@kanardia.eu` and replace them first
-> (instructions are in the placeholder files).
-
 The overlay is set up for the Advantech IDK-1107WR-40WVA1E kit (AUO
 G070VW01 V0, 7" 800x480, listed as `lvds-g070vw01` in Advantech's
-RSB-4810 BSP), with the timings from Advantech's Rockchip vendor kernel.
-Still to be verified on hardware (marked `TODO` in the overlay): the
-backlight enable GPIO (`LVDS_BLENH`, assumed GPIO0_A0), the panel size,
-and LCD_EN/LCD_RST_L on GPIO3_C6/C7 — these two pins are also SDMMC2 D0/D1,
-which the base devicetree uses for the M.2 Wi-Fi SDIO, so with the overlay
-enabled `fe000000.mmc` fails with a pin conflict.
+RSB-4810 BSP). The timings come from Advantech's Rockchip vendor kernel:
+33.3 MHz, htotal 1056, vtotal 508 (~62 Hz), DE mode, `vesa-24`.
+
+The panel control lines (schematic sheets 12/26) are listed below. The
+schematic net names end in `_GPIO3_C6`/`_GPIO3_C7`; these are stale labels
+from the Rockchip reference template. GPIO3_C6..D3 carry SDMMC2 for the
+M.2 SDIO Wi-Fi, and the LVDS overlay does not touch them.
+
+| Net            | Pin      | Function                                              |
+| -------------- | -------- | ----------------------------------------------------- |
+| `LCD_EN_H`     | GPIO3_D4 | panel VDD load switch (`VDD_LVDS`), `vdd_lvds` regulator |
+| `LCD_RST_L`    | GPIO3_D5 | 12 V backlight power (`+VDD_BKLT`, Q87/Q86), `vdd_bklt` regulator; not a panel reset |
+| `LVDS_BLENH`   | GPIO0_A0 | backlight enable, `BL` pin 3                          |
+| `LCD0_BL_PWM4` | PWM4     | backlight dimming, `BL` pin 4                         |
 
 **Enabling the overlay.** `rk3568-rsb4810-lvds.dtbo` is built with the
 kernel, deployed next to the DTB and packed into the fitImage. The boot
-script applies overlays listed in the U-Boot variable `overlays` (unset by
-default, so HDMI-only setups are unaffected). At the U-Boot prompt:
+script applies the overlays listed in the U-Boot variable `overlays`.
+The variable is unset by default, so HDMI-only setups are unaffected. At
+the U-Boot prompt:
 
 ```
 setenv overlays lvds
@@ -243,38 +248,38 @@ saveenv
 boot
 ```
 
-The boot log then shows `Applied devicetree overlay
-rk3568-rsb4810-lvds.dtbo`. If extracting or applying an overlay fails, an
-error is printed and the board boots with the plain devicetree. Use
-`setenv overlays; saveenv` to disable it again.
+The U-Boot environment is stored on the eMMC (`saveenv.cfg`), so the
+setting persists across reboots. The boot log then shows `Applied
+devicetree overlay rk3568-rsb4810-lvds.dtbo`. If extracting or applying
+an overlay fails, an error is printed and the board boots with the plain
+devicetree. Use `setenv overlays; saveenv` to disable it again.
 
 **Jumpers.** The panel and backlight supply voltages are selected by
-jumpers only, there is no software control (see the
+jumpers only; there is no software control (see the
 [Advantech jumper list](https://docs.aim-linux.advantech.com/docs/processors/rockchip/RK3568/RSB-4810_wiki_data/RSB-4810_Debian11_User_Guide)).
 Set them to match the panel before connecting it:
 
-| Jumper | Function                         | Settings                          |
-| ------ | -------------------------------- | --------------------------------- |
-| `VDD2` | LVDS panel VDD (`VDD_LVDS`)      | 1-2: 3.3 V (default), 2-3: 5 V    |
-| `BLP1` | LVDS backlight power, 3.3/5 V    | 1-2: 5 V (default), 2-3: 3.3 V    |
-| `BLP2` | LVDS backlight power, 12 V       | 1-2: 12 V                         |
+| Jumper | Function                       | Settings                       | IDK-1107WR (G070VW01) |
+| ------ | ------------------------------ | ------------------------------ | --------------------- |
+| `VDD2` | LVDS panel VDD (`VDD_LVDS`)    | 1-2: 3.3 V (default), 2-3: 5 V | 1-2 (3.3 V)           |
+| `BLP1` | LVDS backlight power, 3.3/5 V  | 1-2: 5 V (default), 2-3: 3.3 V | removed               |
+| `BLP2` | LVDS backlight power, 12 V     | 1-2: 12 V                      | fitted (12 V)         |
 
-The G070VW01 V0 needs 3.3 V VDD (`VDD2` 1-2) and a 12 V backlight
-supply (`BLP2` fitted). Check on the schematic, or measure `+VDD_BKLT` on
-pin 1 of the `BL` connector, how `BLP1` must be set while `BLP2` is
-fitted. The backlight cable goes to the 5-pin `BL` connector (pin 1
-`+VDD_BKLT`, 2 GND, 3 `LVDS_BLEN`, 4 `LVDS_PWM`, 5 +5 V), the LVDS
-pairs to the 40-pin `LVDS` connector.
+The backlight cable goes to the 5-pin `BL` connector (pin 1 `+VDD_BKLT`,
+2 GND, 3 `LVDS_BLEN`, 4 `LVDS_PWM`, 5 +5 V). The LVDS pairs go to the
+40-pin `LVDS` connector.
 
-**Testing.** `modetest` (from `libdrm-tests`) and `kmscube` come with
-`packagegroup-advantech-display-test` (in core-image-base and up, see
-`conf/machine/rsb4810.conf`):
+**Testing.** `modetest` (from `libdrm-tests`), `gpioset`/`gpioget`
+(from `libgpiod-tools`) and `kmscube` come with
+`packagegroup-advantech-display-test`. It is included in core-image-base
+and larger images (see `conf/machine/rsb4810.conf`); for
+core-image-minimal add it via `CORE_IMAGE_EXTRA_INSTALL`.
 
 ```sh
 dmesg | grep -iE 'lvds|vop2|dsidphy|panel'
 cat /sys/class/drm/card*-LVDS-1/status
 modetest -M rockchip -c
-modetest -M rockchip -s <conn_id>@<crtc_id>:<WxH> -v
+modetest -M rockchip -s <conn_id>@<crtc_id>:800x480 -v
 echo 255 > /sys/class/backlight/backlight-lvds/brightness
 ```
 
@@ -282,21 +287,30 @@ Take `<conn_id>` from the LVDS connector line of `modetest -M rockchip
 -c` and `<crtc_id>` from the CRTC belonging to VOP2 vp1 (`modetest -M
 rockchip -p`).
 
+The G070VW01 dimming input is analog (0.3-5 V), so the brightness may not
+track the PWM duty cycle. The overlay defaults to full brightness (255).
+
 **Troubleshooting.**
 
 * *Backlight on, screen black:* check that the LVDS encoder is fed by
-  VOP2 **vp1** (`&vp1` endpoint in the overlay, CRTC used in `modetest`),
-  then check `data-mapping` (`vesa-24` / `jeida-24` / `jeida-18`) against
-  the panel datasheet — a wrong mapping usually gives a black or garbled
-  picture. Also check the timings and that `VDD2` matches the panel, and
-  measure `VDD_LVDS` on the 40-pin connector (pins 1/2/5/6/40): 0 V means
-  LCD_EN is not on GPIO3_C6.
-* *Backlight off:* test the enable GPIO and the PWM independently, e.g.
-  with the overlay disabled: `gpioset` on GPIO0_A0 (`gpiochip0` line 0;
-  confirm with `gpioinfo`, the pin assignment is still unverified) and
-  PWM4 via `/sys/class/pwm` (export channel 0, set `period` 25000,
-  `duty_cycle`, `enable` 1). Check that `BLP1`/`BLP2` match the backlight
-  voltage.
+  VOP2 **vp1** (`&vp1` endpoint in the overlay, and the CRTC used in
+  `modetest`). Then check `data-mapping`: `vesa-24` by default, `jeida-18`
+  if the panel's SEL68 pin is strapped low. A wrong mapping usually gives
+  a black or garbled picture. If the panel does not lock, try the
+  alternative 29.5 MHz timing noted in the overlay. Also measure
+  `VDD_LVDS` on the 40-pin connector (pins 1/2/5/6/40); it must be 3.3 V
+  while GPIO3_D4 is high.
+* *Backlight off:* check the jumpers, then test the lines independently
+  with the overlay disabled (`setenv overlays; saveenv`). `gpioset -z`
+  holds a line in the background until `pkill gpioset`:
+
+  ```sh
+  gpioset -z -c gpiochip3 29=1   # GPIO3_D5: +VDD_BKLT (BL pin 1) -> 12 V
+  gpioset -z -c gpiochip0 0=1    # GPIO0_A0: LVDS_BLEN (BL pin 3)
+  ```
+
+  Test PWM4 through `/sys/class/pwm`: export channel 0, then set `period`
+  25000, `duty_cycle` and `enable` 1.
 
 ## AOM-6881 + SOM-DB2510
 
