@@ -1,22 +1,73 @@
-RSB4810-LVDS-PLACEHOLDER
+From git@z Thu Jan  1 00:00:00 1970
+Subject: [PATCH v2 2/4] dt-bindings: display: rockchip,lvds: add RK3568
+From: Rok Markovic <rok@kanardia.eu>
+Date: Fri, 24 Jul 2026 10:08:22 +0200
+Message-Id: <20260724080824.115260-3-rok@kanardia.eu>
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 7bit
 
-This file is a placeholder for patch 2/4 of the out-of-tree series
+The RK3568 LVDS transmitter has no register block of its own: it is
+programmed entirely through the GRF and re-uses the MIPI DSI0 D-PHY
+(rockchip,rk3568-dsi-dphy) in LVDS mode. It therefore takes the same
+shape as px30: phys/phy-names, no reg, and no clock of its own.
 
-  [PATCH v2 0/4] drm/rockchip: add RK3568 LVDS support
-  Author:     Rok Markovic <rok@kanardia.eu>
-  Message-ID: 20260724080824.115260-1-rok@kanardia.eu
+Since the block exposes no MMIO, nothing in the LVDS path is clocked
+from the DSI controller's APB clock; that gate is held off while LVDS
+scans out. It has no analog supplies of its own and no pinctrl either:
+the lanes are dedicated D-PHY pins, not muxable GPIOs.
 
-  [PATCH v2 2/4] dt-bindings: display: rockchip,lvds: add RK3568
+Signed-off-by: Rok Markovic <rok@kanardia.eu>
+Assisted-by: Claude:claude-opus-4-8
+---
+Changes in v2:
+  - RK3568 now takes no clock (clocks/clock-names disabled, as for
+    px30): the block has no register space, so nothing consumes the
+    DSI controller's APB clock.
 
-The real patch could not be downloaded when this layer change was made.
-Replace this file with the real patch (same file name), e.g.:
+ .../display/rockchip/rockchip,lvds.yaml       | 22 +++++++++++++++++++
+ 1 file changed, 22 insertions(+)
 
-  b4 am -o /tmp/rk3568-lvds 20260724080824.115260-1-rok@kanardia.eu
-  cd <linux-yocto v6.18 tree>
-  git am -3 /tmp/rk3568-lvds/*.mbx      # rebase here if a hunk fails
-  git format-patch -4 -o /tmp/rk3568-lvds/out
-  # then copy the four patches over the placeholders in
-  # recipes-kernel/linux/linux-yocto/rsb4810/ keeping these file names
+diff --git a/Documentation/devicetree/bindings/display/rockchip/rockchip,lvds.yaml b/Documentation/devicetree/bindings/display/rockchip/rockchip,lvds.yaml
+index 03b002a..b77d4fa 100644
+--- a/Documentation/devicetree/bindings/display/rockchip/rockchip,lvds.yaml
++++ b/Documentation/devicetree/bindings/display/rockchip/rockchip,lvds.yaml
+@@ -15,6 +15,7 @@ properties:
+     enum:
+       - rockchip,px30-lvds
+       - rockchip,rk3288-lvds
++      - rockchip,rk3568-lvds
+ 
+   reg:
+     maxItems: 1
+@@ -121,6 +122,27 @@ allOf:
+         - avdd1v8-supply
+         - avdd3v3-supply
+ 
++  - if:
++      properties:
++        compatible:
++          contains:
++            const: rockchip,rk3568-lvds
++
++    then:
++      properties:
++        reg: false
++        clocks: false
++        clock-names: false
++        avdd1v0-supply: false
++        avdd1v8-supply: false
++        avdd3v3-supply: false
++        pinctrl-names: false
++        pinctrl-0: false
++
++      required:
++        - phys
++        - phy-names
++
+ additionalProperties: false
+ 
+ examples:
+-- 
+2.43.0
 
-The kernel build stops in do_patch with an explanatory error as long as
-any placeholder is still present (see linux-yocto/rsb4810.inc).

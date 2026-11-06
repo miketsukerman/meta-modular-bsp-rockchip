@@ -1,22 +1,60 @@
-RSB4810-LVDS-PLACEHOLDER
+From git@z Thu Jan  1 00:00:00 1970
+Subject: [PATCH v2 4/4] arm64: dts: rockchip: rk356x: add LVDS node
+From: Rok Markovic <rok@kanardia.eu>
+Date: Fri, 24 Jul 2026 10:08:24 +0200
+Message-Id: <20260724080824.115260-5-rok@kanardia.eu>
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 7bit
 
-This file is a placeholder for patch 4/4 of the out-of-tree series
+This commit adds the LVDS transmitter node for the RK356x SoC, assigning
+its D-PHY, GRF handle and power domain. The block has no register block
+and no clock of its own. It is left disabled by default, to be enabled
+by specific board files.
 
-  [PATCH v2 0/4] drm/rockchip: add RK3568 LVDS support
-  Author:     Rok Markovic <rok@kanardia.eu>
-  Message-ID: 20260724080824.115260-1-rok@kanardia.eu
+Signed-off-by: Rok Markovic <rok@kanardia.eu>
+Assisted-by: Claude:claude-opus-4-8
+---
+Changes in v2:
+  - Drop the clock from the LVDS node; the block takes none.
 
-  [PATCH v2 4/4] arm64: dts: rockchip: rk356x: add LVDS node
+ arch/arm64/boot/dts/rockchip/rk356x-base.dtsi | 23 +++++++++++++++++++
+ 1 file changed, 23 insertions(+)
 
-The real patch could not be downloaded when this layer change was made.
-Replace this file with the real patch (same file name), e.g.:
+diff --git a/arch/arm64/boot/dts/rockchip/rk356x-base.dtsi b/arch/arm64/boot/dts/rockchip/rk356x-base.dtsi
+index 64bdd8b..61a932a 100644
+--- a/arch/arm64/boot/dts/rockchip/rk356x-base.dtsi
++++ b/arch/arm64/boot/dts/rockchip/rk356x-base.dtsi
+@@ -878,6 +878,29 @@
+ 		};
+ 	};
+ 
++	lvds: lvds {
++		compatible = "rockchip,rk3568-lvds";
++		phys = <&dsi_dphy0>;
++		phy-names = "dphy";
++		power-domains = <&power RK3568_PD_VO>;
++		rockchip,grf = <&grf>;
++		rockchip,output = "lvds";
++		status = "disabled";
++
++		ports {
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			lvds_in: port@0 {
++				reg = <0>;
++			};
++
++			lvds_out: port@1 {
++				reg = <1>;
++			};
++		};
++	};
++
+ 	qos_gpu: qos@fe128000 {
+ 		compatible = "rockchip,rk3568-qos", "syscon";
+ 		reg = <0x0 0xfe128000 0x0 0x20>;
+-- 
+2.43.0
 
-  b4 am -o /tmp/rk3568-lvds 20260724080824.115260-1-rok@kanardia.eu
-  cd <linux-yocto v6.18 tree>
-  git am -3 /tmp/rk3568-lvds/*.mbx      # rebase here if a hunk fails
-  git format-patch -4 -o /tmp/rk3568-lvds/out
-  # then copy the four patches over the placeholders in
-  # recipes-kernel/linux/linux-yocto/rsb4810/ keeping these file names
-
-The kernel build stops in do_patch with an explanatory error as long as
-any placeholder is still present (see linux-yocto/rsb4810.inc).
