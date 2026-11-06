@@ -26,6 +26,8 @@ rk3288 and px30 pair with the VOP1 driver (rockchip_drm_vop.c), which
 never reads bus_flags - only VOP2 consumes it. The flag becomes live
 with the RK3568 support added later in this series.
 
+Upstream-Status: Submitted [https://lore.kernel.org/all/20260724080824.115260-2-rok@kanardia.eu/]
+
 Signed-off-by: Rok Markovic <rok@kanardia.eu>
 Assisted-by: Claude:claude-opus-4-8
 Reviewed-by: Chaoyi Chen <chaoyi.chen@rock-chips.com>

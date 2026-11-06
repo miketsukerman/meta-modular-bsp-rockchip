@@ -12,6 +12,8 @@ its D-PHY, GRF handle and power domain. The block has no register block
 and no clock of its own. It is left disabled by default, to be enabled
 by specific board files.
 
+Upstream-Status: Submitted [https://lore.kernel.org/all/20260724080824.115260-5-rok@kanardia.eu/]
+
 Signed-off-by: Rok Markovic <rok@kanardia.eu>
 Assisted-by: Claude:claude-opus-4-8
 ---

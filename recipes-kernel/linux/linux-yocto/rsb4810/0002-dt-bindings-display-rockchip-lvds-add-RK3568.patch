@@ -17,6 +17,8 @@ from the DSI controller's APB clock; that gate is held off while LVDS
 scans out. It has no analog supplies of its own and no pinctrl either:
 the lanes are dedicated D-PHY pins, not muxable GPIOs.
 
+Upstream-Status: Submitted [https://lore.kernel.org/all/20260724080824.115260-3-rok@kanardia.eu/]
+
 Signed-off-by: Rok Markovic <rok@kanardia.eu>
 Assisted-by: Claude:claude-opus-4-8
 ---

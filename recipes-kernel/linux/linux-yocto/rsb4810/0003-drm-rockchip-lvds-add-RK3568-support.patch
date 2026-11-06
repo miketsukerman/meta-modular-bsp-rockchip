@@ -57,6 +57,8 @@ runtime-PM count of an encoder that never came up.
 
 [1] https://lore.kernel.org/all/20230119184807.171132-1-a1ba.omarov@gmail.com/
 
+Upstream-Status: Submitted [https://lore.kernel.org/all/20260724080824.115260-4-rok@kanardia.eu/]
+
 Co-developed-by: Alibek Omarov <a1ba.omarov@gmail.com>
 Signed-off-by: Alibek Omarov <a1ba.omarov@gmail.com>
 Signed-off-by: Rok Markovic <rok@kanardia.eu>
