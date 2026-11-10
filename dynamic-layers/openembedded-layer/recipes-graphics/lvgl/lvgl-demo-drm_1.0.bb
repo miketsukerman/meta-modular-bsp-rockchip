@@ -17,7 +17,8 @@ SRC_URI = " \
 
 S = "${UNPACKDIR}"
 
-DEPENDS = "lvgl"
+# libdrm: needed by the LVGL headers (lvgl.pc "Requires: libdrm")
+DEPENDS = "lvgl libdrm"
 
 inherit cmake pkgconfig systemd
 

@@ -53,3 +53,13 @@ EXTRA_OECMAKE += " \
 # library even when Kconfig disables them. Default them off; a Kconfig
 # fragment enabling them still wins.
 EXTRA_OECMAKE += "-DCONFIG_LV_BUILD_EXAMPLES=OFF -DCONFIG_LV_USE_THORVG_INTERNAL=OFF"
+
+# The public headers include libdrm's (lv_linux_drm.h -> <xf86drmMode.h> ->
+# <drm.h> in ${includedir}/libdrm), but LVGL's lvgl.pc only lists liblvgl,
+# so pkg-config users fail to compile. Declare the requirement; this also
+# makes lvgl-dev RDEPEND on libdrm-dev.
+do_install:append() {
+    if ${@bb.utils.contains('PACKAGECONFIG', 'drm', 'true', 'false', d)}; then
+        sed -i '/^Libs:/i Requires: libdrm' ${D}${datadir}/pkgconfig/lvgl.pc
+    fi
+}
