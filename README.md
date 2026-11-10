@@ -277,7 +277,7 @@ The backlight cable goes to the 5-pin `BL` connector (pin 1 `+VDD_BKLT`,
 40-pin `LVDS` connector.
 
 **Testing.** `modetest` (from `libdrm-tests`), `gpioset`/`gpioget`
-(from `libgpiod-tools`) and `kmscube` come with
+(from `libgpiod-tools`, only with meta-oe) and `kmscube` come with
 `packagegroup-advantech-display-test`. It is included in core-image-base
 and larger images (see `conf/machine/rsb4810.conf`); for
 core-image-minimal add it via `CORE_IMAGE_EXTRA_INSTALL`.
