@@ -21,6 +21,13 @@ This layer depends on the following layers (all on the `wrynose` branch):
 * [meta-arm](https://git.yoctoproject.org/meta-arm) (`meta-arm` and `meta-arm-toolchain`)
 * [meta-rockchip](https://git.yoctoproject.org/meta-rockchip)
 
+Optional:
+
+* [meta-oe](https://git.openembedded.org/meta-openembedded) (`meta-openembedded/meta-oe`)
+  for the LVGL integration (see [LVGL](#rsb-4810-lvgl)); its recipes live in
+  `dynamic-layers/openembedded-layer/` and are only parsed when meta-oe is in
+  `bblayers.conf`
+
 ## Building
 
 Set up a build as usual for openembedded-core/poky, add the layers above and
@@ -312,6 +319,94 @@ track the PWM duty cycle. The overlay defaults to full brightness (255).
   Test PWM4 through `/sys/class/pwm`: export channel 0, then set `period`
   25000, `duty_cycle` and `enable` 1.
 
+### RSB-4810 LVGL
+
+[LVGL](https://lvgl.io/) v9.4 from meta-oe (`lvgl_9.4.0.bb`) is configured for
+the RK3568 by `dynamic-layers/openembedded-layer/recipes-graphics/lvgl/lvgl_%.bbappend`
+(applied only when `rk3568` is in `MACHINEOVERRIDES`; other machines get the
+plain meta-oe recipe). LVGL draws directly on the DRM/KMS device through its
+own Linux DRM driver, without a display server, and reads pointer and touch
+input through evdev.
+
+**Enabling it in an image.** Add meta-oe to `bblayers.conf`, then in
+`local.conf`:
+
+```
+EXTRA_IMAGE_FEATURES += "lvgl"
+```
+
+This installs `packagegroup-advantech-lvgl`: `liblvgl`, `liblvgl_demos` and
+the `lvgl-demo-drm` widgets demo. Nothing is added to images by default.
+Applications build against the installed library with
+`DEPENDS += "lvgl"` and `pkg-config lvgl` (headers in `/usr/include/lvgl`,
+including the generated `lv_conf.h`).
+
+**EGL vs. software rendering.**
+
+* *EGL/OpenGL ES (default with the `opengl` distro feature):* LVGL renders
+  through EGL on a GBM surface, with its OpenGL ES draw unit, on the
+  Mali-G52 GPU. meta-rockchip builds Mesa with the panfrost driver
+  (`mesa.bbappend`), and lvgl pulls in Mesa's DRI drivers and the panfrost
+  kernel module (`mesa-megadriver`, `kernel-module-panfrost`). LVGL v9.4 has no NanoVG renderer; that
+  arrives in v9.5.
+* *Software:* LVGL renders on the CPU with 4 draw threads into DRM dumb
+  buffers, needing only libdrm. This is used automatically without
+  `opengl`, or can be forced with:
+
+  ```
+  PACKAGECONFIG:remove:pn-lvgl = "egl"
+  ```
+
+* `PACKAGECONFIG:append:pn-lvgl = " libinput"` adds the libinput input
+  driver.
+
+Check which backend a build uses in `/usr/include/lvgl/lv_conf.h` of the SDK
+or sysroot (`LV_LINUX_DRM_USE_EGL`). If the EGL demo fails to start on the
+target, check `dmesg | grep panfrost` and that `/dev/dri/renderD128` exists.
+
+The configuration is in Kconfig fragments next to the bbappend
+(`lvgl/rk3568/*.cfg`, LVGL v9.4 symbol names). LVGL v9.4 implements the DRM
+EGL backend, but its Kconfig cannot select it, so the bbappend carries a
+small Kconfig patch adding a "Linux DRM rendering backend" choice, as found
+in LVGL master.
+
+**HDMI vs. LVDS.** The demo uses the first DRM card that has connectors (the
+VOP2 `rockchip` card, not the panfrost render node) and the first
+*connected* connector. Select them explicitly with environment variables:
+
+| Variable           | Default                           | Meaning                          |
+| ------------------ | --------------------------------- | -------------------------------- |
+| `LV_DRM_DEVICE`    | auto (`lv_linux_drm_find_device_path()`) | DRM card, e.g. `/dev/dri/card0` |
+| `LV_DRM_CONNECTOR` | first connected connector         | connector id                     |
+| `LV_EVDEV_DEVICE`  | `/dev/input/event0`               | pointer/touch device, `none` to disable |
+
+Take the connector ids of `HDMI-A-1` and `LVDS-1` from
+`modetest -M rockchip -c`. LVDS needs the `lvds` overlay (see
+[LVDS panel](#rsb-4810-lvds-panel)).
+
+**Running the demo.** LVGL needs to be the DRM master, so stop any other
+display server first (e.g. the X server of `core-image-sato`). Then run:
+
+```sh
+lvgl-demo-drm                                            # first connected output
+LV_DRM_CONNECTOR=<id> LV_EVDEV_DEVICE=/dev/input/eventN lvgl-demo-drm
+```
+
+Find the touchscreen's `eventN` in `/proc/bus/input/devices`. To start the
+demo at boot, install `lvgl-demo-drm-service` (not part of the
+packagegroup). Set the variables with `systemctl edit lvgl-demo`, then run
+`systemctl enable --now lvgl-demo`.
+
+**Known limitations.**
+
+* LVGL has no draw unit for the Rockchip RGA 2D engine; rendering is either
+  CPU (software) or GPU via OpenGL ES.
+* One LVGL display per DRM device: the LVGL DRM driver opens the card as DRM
+  master and drives a single connector/CRTC, so HDMI and LVDS cannot be
+  driven as two LVGL displays at the same time.
+* No display server: LVGL cannot run while Weston or X owns the DRM device.
+* Neither backend has been tested on RSB-4810 hardware yet.
+
 ## AOM-6881 + SOM-DB2510
 
 SMARC 2.1 module based on the Rockchip RK3588 (quad Cortex-A76 + quad
@@ -377,6 +472,10 @@ recipes-kernel/linux/                  kernel board integration:
   linux-yocto/<machine>.inc            per-machine devicetree/config wiring
   linux-yocto/<machine>/               board devicetree sources, overlays, patches
   linux-yocto/common/                  shared kernel config fragments
+dynamic-layers/openembedded-layer/     only parsed with meta-oe:
+  recipes-graphics/lvgl/               lvgl bbappend (per-SoC .inc, Kconfig
+                                       fragments), lvgl-demo-drm
+  recipes-graphics/packagegroups/      packagegroup-advantech-lvgl
 ```
 
 RAM/storage variants of a board follow the per-variant machine configuration
