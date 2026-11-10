@@ -324,9 +324,13 @@ track the PWM duty cycle. The overlay defaults to full brightness (255).
 [LVGL](https://lvgl.io/) v9.4 from meta-oe (`lvgl_9.4.0.bb`) is configured for
 the RK3568 by `dynamic-layers/openembedded-layer/recipes-graphics/lvgl/lvgl_%.bbappend`
 (applied only when `rk3568` is in `MACHINEOVERRIDES`; other machines get the
-plain meta-oe recipe). LVGL draws directly on the DRM/KMS device through its
-own Linux DRM driver, without a display server, and reads pointer and touch
-input through evdev.
+plain meta-oe recipe). LVGL applications can run in two ways, chosen at
+runtime:
+
+* **Wayland:** as a client of Weston (`core-image-weston`), next to other
+  applications. Pointer, touch and keyboard come from the compositor.
+* **DRM/KMS:** directly on the display without a compositor (e.g.
+  `core-image-base`), with evdev input.
 
 **Enabling it in an image.** Add meta-oe to `bblayers.conf`, then in
 `local.conf`:
@@ -336,76 +340,99 @@ EXTRA_IMAGE_FEATURES += "lvgl"
 ```
 
 This installs `packagegroup-advantech-lvgl`: `liblvgl`, `liblvgl_demos` and
-the `lvgl-demo-drm` widgets demo. Nothing is added to images by default.
+the `lvgl-demo` widgets demo. Nothing is added to images by default.
 Applications build against the installed library with
 `DEPENDS += "lvgl"` and `pkg-config lvgl` (headers in `/usr/include/lvgl`,
 including the generated `lv_conf.h`).
 
-**EGL vs. software rendering.**
+**Build options** (`PACKAGECONFIG` of `lvgl`; defaults follow the distro
+features):
 
-* *EGL/OpenGL ES (default with the `opengl` distro feature):* LVGL renders
-  through EGL on a GBM surface, with its OpenGL ES draw unit, on the
-  Mali-G52 GPU. meta-rockchip builds Mesa with the panfrost driver
-  (`mesa.bbappend`), and lvgl pulls in Mesa's DRI drivers and the panfrost
-  kernel module (`mesa-megadriver`, `kernel-module-panfrost`). LVGL v9.4 has no NanoVG renderer; that
-  arrives in v9.5.
-* *Software:* LVGL renders on the CPU with 4 draw threads into DRM dumb
-  buffers, needing only libdrm. This is used automatically without
-  `opengl`, or can be forced with:
+| Option      | Default                | Effect |
+| ----------- | ---------------------- | ------ |
+| `drm`       | on                     | DRM/KMS display backend (meta-oe default) |
+| `egl`       | with `opengl`          | DRM backend presents through EGL/OpenGL ES on a GBM surface (Mali-G52, Mesa panfrost from meta-rockchip's `mesa.bbappend`); without it, software rendering into DRM dumb buffers |
+| `wayland`   | with `wayland`         | Wayland client backend |
+| `gles-draw` | off                    | OpenGL ES draw unit (GPU drawing); needs `egl`, not possible with `wayland` |
+| `libinput`  | off                    | libinput input driver in addition to evdev |
 
-  ```
-  PACKAGECONFIG:remove:pn-lvgl = "egl"
-  ```
+Change them in `local.conf`, e.g. `PACKAGECONFIG:remove:pn-lvgl = "egl"` for
+pure software rendering, or `PACKAGECONFIG:append:pn-lvgl = " gles-draw"`
+together with `PACKAGECONFIG:remove:pn-lvgl = "wayland"`.
 
-* `PACKAGECONFIG:append:pn-lvgl = " libinput"` adds the libinput input
-  driver.
+Rendering notes for LVGL v9.4:
 
-Check which backend a build uses in `/usr/include/lvgl/lv_conf.h` of the SDK
-or sysroot (`LV_LINUX_DRM_USE_EGL`). If the EGL demo fails to start on the
-target, check `dmesg | grep panfrost` and that `/dev/dri/renderD128` exists.
+* Drawing is done on the CPU with 4 draw threads unless `gles-draw` is
+  enabled. With `egl`, the GPU presents the frames.
+* The Wayland backend renders into shared-memory (`wl_shm`) buffers; its
+  DMA-buffer path needs NXP G2D. Weston composites the window on the GPU.
+* The OpenGL ES draw unit is registered for every display and needs a GL
+  context, so it cannot be combined with the Wayland backend.
+* There is no NanoVG renderer before v9.5.
 
 The configuration is in Kconfig fragments next to the bbappend
-(`lvgl/rk3568/*.cfg`, LVGL v9.4 symbol names). LVGL v9.4 implements the DRM
-EGL backend, but its Kconfig cannot select it, so the bbappend carries a
-small Kconfig patch adding a "Linux DRM rendering backend" choice, as found
-in LVGL master.
+(`lvgl/rk3568/*.cfg`, LVGL v9.4 symbol names). The bbappend also carries two
+small patches for v9.4: a Kconfig "Linux DRM rendering backend" choice, as
+found in LVGL master, and a Wayland fix for windows that the compositor
+configures larger than requested (full screen, kiosk shell). LVGL asserts
+abort the process instead of looping forever. Check the resulting
+configuration in `/usr/include/lvgl/lv_conf.h` of the SDK or sysroot.
 
-**HDMI vs. LVDS.** The demo uses the first DRM card that has connectors (the
-VOP2 `rockchip` card, not the panfrost render node) and the first
-*connected* connector. Select them explicitly with environment variables:
+**Running the demo.** `lvgl-demo` picks the backend automatically:
 
-| Variable           | Default                           | Meaning                          |
-| ------------------ | --------------------------------- | -------------------------------- |
-| `LV_DRM_DEVICE`    | auto (`lv_linux_drm_find_device_path()`) | DRM card, e.g. `/dev/dri/card0` |
-| `LV_DRM_CONNECTOR` | first connected connector         | connector id                     |
-| `LV_EVDEV_DEVICE`  | `/dev/input/event0`               | pointer/touch device, `none` to disable |
-
-Take the connector ids of `HDMI-A-1` and `LVDS-1` from
-`modetest -M rockchip -c`. LVDS needs the `lvds` overlay (see
-[LVDS panel](#rsb-4810-lvds-panel)).
-
-**Running the demo.** LVGL needs to be the DRM master, so stop any other
-display server first (e.g. the X server of `core-image-sato`). Then run:
+* **Wayland,** if `WAYLAND_DISPLAY` is set or Weston's socket
+  `/run/wayland-0` exists. This is the `core-image-weston` case, also from a
+  root shell on the serial console. It opens a full-screen window.
+* **DRM/KMS** otherwise. This needs exclusive access to the display, so
+  stop Weston first (`systemctl stop weston.socket weston.service`).
 
 ```sh
-lvgl-demo-drm                                            # first connected output
-LV_DRM_CONNECTOR=<id> LV_EVDEV_DEVICE=/dev/input/eventN lvgl-demo-drm
+lvgl-demo                                      # Wayland under Weston, else DRM/KMS
+LV_BACKEND=drm LV_DRM_CONNECTOR=<id> LV_EVDEV_DEVICE=/dev/input/eventN lvgl-demo
 ```
 
-Find the touchscreen's `eventN` in `/proc/bus/input/devices`. To start the
-demo at boot, install `lvgl-demo-drm-service` (not part of the
+| Variable                | Default                    | Meaning |
+| ----------------------- | -------------------------- | ------- |
+| `LV_BACKEND`            | auto                       | `wayland` or `drm` |
+| `LV_WAYLAND_FULLSCREEN` | `1`                        | `0` for a normal window |
+| `LV_WAYLAND_SIZE`       | `800x480`                  | window size |
+| `LV_DRM_DEVICE`         | first card with connectors | DRM card, e.g. `/dev/dri/card0` (the VOP2 `rockchip` card, not the panfrost render node) |
+| `LV_DRM_CONNECTOR`      | first connected connector  | DRM connector id, for HDMI vs. LVDS |
+| `LV_EVDEV_DEVICE`       | `/dev/input/event0`        | pointer/touch device for DRM, `none` to disable |
+
+**HDMI vs. LVDS.** Under Weston, the outputs are Weston's: the window opens
+on the output Weston chooses. For DRM/KMS, take the connector ids of
+`HDMI-A-1` and `LVDS-1` from `modetest -M rockchip -c`. LVDS needs the
+`lvds` overlay (see [LVDS panel](#rsb-4810-lvds-panel)). Find the
+touchscreen's `eventN` in `/proc/bus/input/devices`.
+
+**Kiosk use.** For a single full-screen LVGL application under Weston, use
+Weston's kiosk shell, which shows every window full screen without a
+panel. In `/etc/xdg/weston/weston.ini`:
+
+```
+[core]
+shell=kiosk-shell.so
+```
+
+With the default desktop shell, the full-screen request is acknowledged,
+but in tests with Weston 13 the window kept its normal position. The board's
+Weston 15 is untested.
+
+To start the demo at boot, install `lvgl-demo-service` (not part of the
 packagegroup). Set the variables with `systemctl edit lvgl-demo`, then run
 `systemctl enable --now lvgl-demo`.
 
 **Known limitations.**
 
-* LVGL has no draw unit for the Rockchip RGA 2D engine; rendering is either
-  CPU (software) or GPU via OpenGL ES.
-* One LVGL display per DRM device: the LVGL DRM driver opens the card as DRM
-  master and drives a single connector/CRTC, so HDMI and LVDS cannot be
-  driven as two LVGL displays at the same time.
-* No display server: LVGL cannot run while Weston or X owns the DRM device.
-* Neither backend has been tested on RSB-4810 hardware yet.
+* LVGL has no draw unit for the Rockchip RGA 2D engine.
+* With DRM/KMS: one LVGL display per DRM device. The LVGL DRM driver opens
+  the card as DRM master and drives a single connector/CRTC, so HDMI and
+  LVDS cannot be driven as two LVGL displays at the same time, and not while
+  Weston or X owns the device.
+* Not yet tested on RSB-4810 hardware. The Wayland backend was tested
+  against a headless Weston (window and full screen under the kiosk shell);
+  the DRM/KMS and EGL paths only built.
 
 ## AOM-6881 + SOM-DB2510
 
@@ -474,7 +501,7 @@ recipes-kernel/linux/                  kernel board integration:
   linux-yocto/common/                  shared kernel config fragments
 dynamic-layers/openembedded-layer/     only parsed with meta-oe:
   recipes-graphics/lvgl/               lvgl bbappend (per-SoC .inc, Kconfig
-                                       fragments), lvgl-demo-drm
+                                       fragments, patches), lvgl-demo
   recipes-graphics/packagegroups/      packagegroup-advantech-lvgl
 ```
 
