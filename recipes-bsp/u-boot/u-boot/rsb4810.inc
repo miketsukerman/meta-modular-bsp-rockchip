@@ -8,6 +8,7 @@
 SRC_URI += " \
     file://rk3568-rsb4810.dts;subdir=dts/upstream/src/arm64/rockchip \
     file://baudrate-115200.cfg \
+    file://fdt-overlay.cfg \
 "
 
 do_configure:prepend() {

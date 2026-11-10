@@ -21,6 +21,13 @@ This layer depends on the following layers (all on the `wrynose` branch):
 * [meta-arm](https://git.yoctoproject.org/meta-arm) (`meta-arm` and `meta-arm-toolchain`)
 * [meta-rockchip](https://git.yoctoproject.org/meta-rockchip)
 
+Optional:
+
+* [meta-oe](https://git.openembedded.org/meta-openembedded) (`meta-openembedded/meta-oe`)
+  for the LVGL integration (see [LVGL](#rsb-4810-lvgl)); its recipes live in
+  `dynamic-layers/openembedded-layer/` and are only parsed when meta-oe is in
+  `bblayers.conf`
+
 ## Building
 
 Set up a build as usual for openembedded-core/poky, add the layers above and
@@ -195,7 +202,8 @@ literal garbage on the serial console.
 | USB 2.0   | ⚠️     | Combo-PHY driver now built-in (rsb4810-eth-usb.cfg), retest |
 | USB 3.0   | ⚠️     | Combo-PHY driver now built-in (rsb4810-eth-usb.cfg), retest |
 | HDMI      | ⚠️     | Not tested; X11 images need XSERVER:remove = "xserver-xorg-xvfb" (in rsb4810.conf) |
-| LVDS/eDP  | ❌     | Needs porting from the vendor kernel        |
+| LVDS      | ⚠️     | LVDS0 via out-of-tree patches + `lvds` overlay, not tested (see [LVDS panel](#rsb-4810-lvds-panel)) |
+| eDP       | ❌     | Needs porting from the vendor kernel        |
 | PCIe/M.2  | ⚠️     | Not tested                                  |
 | Mini-PCIe | ⚠️     | Not tested                                  |
 | UART      | ⚠️     | Debug console on ttyS2 @ 115200 (whole stack) |
@@ -206,6 +214,225 @@ literal garbage on the serial console.
 | Wi-Fi/BT  | ❌     | M.2 module firmware packaging needed        |
 
 Legend: ✅ working, ⚠️ untested/partial, ❌ not yet supported.
+
+### RSB-4810 LVDS panel
+
+The RK3568 LVDS transmitter is not supported by mainline Linux. This layer
+carries the series "drm/rockchip: add RK3568 LVDS support" by Rok Markovic
+([lore](https://lore.kernel.org/all/20260724080824.115260-1-rok@kanardia.eu/),
+submitted upstream) as
+`recipes-kernel/linux/linux-yocto/rsb4810/000[1-4]-*.patch`, plus the
+`rsb4810-lvds.cfg` kernel config fragment and the devicetree overlay
+`rk3568-rsb4810-lvds.dtso`. Limitations: single-channel LVDS0 only,
+driven by VOP2 video port 1 (vp0 drives HDMI, vp2 has a known bug).
+
+The overlay is set up for the Advantech IDK-1107WR-40WVA1E kit (AUO
+G070VW01 V0, 7" 800x480, listed as `lvds-g070vw01` in Advantech's
+RSB-4810 BSP). The timings come from Advantech's Rockchip vendor kernel:
+33.3 MHz, htotal 1056, vtotal 508 (~62 Hz), DE mode, `vesa-24`.
+
+The panel control lines (schematic sheets 12/26) are listed below. The
+schematic net names end in `_GPIO3_C6`/`_GPIO3_C7`; these are stale labels
+from the Rockchip reference template. GPIO3_C6..D3 carry SDMMC2 for the
+M.2 SDIO Wi-Fi, and the LVDS overlay does not touch them.
+
+| Net            | Pin      | Function                                              |
+| -------------- | -------- | ----------------------------------------------------- |
+| `LCD_EN_H`     | GPIO3_D4 | panel VDD load switch (`VDD_LVDS`), `vdd_lvds` regulator |
+| `LCD_RST_L`    | GPIO3_D5 | 12 V backlight power (`+VDD_BKLT`, Q87/Q86), `vdd_bklt` regulator; not a panel reset |
+| `LVDS_BLENH`   | GPIO0_A0 | backlight enable, `BL` pin 3                          |
+| `LCD0_BL_PWM4` | PWM4     | backlight dimming, `BL` pin 4                         |
+
+**Enabling the overlay.** `rk3568-rsb4810-lvds.dtbo` is built with the
+kernel, deployed next to the DTB and packed into the fitImage. The boot
+script applies the overlays listed in the U-Boot variable `overlays`.
+The variable is unset by default, so HDMI-only setups are unaffected. At
+the U-Boot prompt:
+
+```
+setenv overlays lvds
+saveenv
+boot
+```
+
+The U-Boot environment is stored on the eMMC (`saveenv.cfg`), so the
+setting persists across reboots. The boot log then shows `Applied
+devicetree overlay rk3568-rsb4810-lvds.dtbo`. If extracting or applying
+an overlay fails, an error is printed and the board boots with the plain
+devicetree. Use `setenv overlays; saveenv` to disable it again.
+
+**Jumpers.** The panel and backlight supply voltages are selected by
+jumpers only; there is no software control (see the
+[Advantech jumper list](https://docs.aim-linux.advantech.com/docs/processors/rockchip/RK3568/RSB-4810_wiki_data/RSB-4810_Debian11_User_Guide)).
+Set them to match the panel before connecting it:
+
+| Jumper | Function                       | Settings                       | IDK-1107WR (G070VW01) |
+| ------ | ------------------------------ | ------------------------------ | --------------------- |
+| `VDD2` | LVDS panel VDD (`VDD_LVDS`)    | 1-2: 3.3 V (default), 2-3: 5 V | 1-2 (3.3 V)           |
+| `BLP1` | LVDS backlight power, 3.3/5 V  | 1-2: 5 V (default), 2-3: 3.3 V | removed               |
+| `BLP2` | LVDS backlight power, 12 V     | 1-2: 12 V                      | fitted (12 V)         |
+
+The backlight cable goes to the 5-pin `BL` connector (pin 1 `+VDD_BKLT`,
+2 GND, 3 `LVDS_BLEN`, 4 `LVDS_PWM`, 5 +5 V). The LVDS pairs go to the
+40-pin `LVDS` connector.
+
+**Testing.** `modetest` (from `libdrm-tests`), `gpioset`/`gpioget`
+(from `libgpiod-tools`, only with meta-oe) and `kmscube` come with
+`packagegroup-advantech-display-test`. It is included in core-image-base
+and larger images (see `conf/machine/rsb4810.conf`); for
+core-image-minimal add it via `CORE_IMAGE_EXTRA_INSTALL`.
+
+```sh
+dmesg | grep -iE 'lvds|vop2|dsidphy|panel'
+cat /sys/class/drm/card*-LVDS-1/status
+modetest -M rockchip -c
+modetest -M rockchip -s <conn_id>@<crtc_id>:800x480 -v
+echo 255 > /sys/class/backlight/backlight-lvds/brightness
+```
+
+Take `<conn_id>` from the LVDS connector line of `modetest -M rockchip
+-c` and `<crtc_id>` from the CRTC belonging to VOP2 vp1 (`modetest -M
+rockchip -p`).
+
+The G070VW01 dimming input is analog (0.3-5 V), so the brightness may not
+track the PWM duty cycle. The overlay defaults to full brightness (255).
+
+**Troubleshooting.**
+
+* *Backlight on, screen black:* check that the LVDS encoder is fed by
+  VOP2 **vp1** (`&vp1` endpoint in the overlay, and the CRTC used in
+  `modetest`). Then check `data-mapping`: `vesa-24` by default, `jeida-18`
+  if the panel's SEL68 pin is strapped low. A wrong mapping usually gives
+  a black or garbled picture. If the panel does not lock, try the
+  alternative 29.5 MHz timing noted in the overlay. Also measure
+  `VDD_LVDS` on the 40-pin connector (pins 1/2/5/6/40); it must be 3.3 V
+  while GPIO3_D4 is high.
+* *Backlight off:* check the jumpers, then test the lines independently
+  with the overlay disabled (`setenv overlays; saveenv`). `gpioset -z`
+  holds a line in the background until `pkill gpioset`:
+
+  ```sh
+  gpioset -z -c gpiochip3 29=1   # GPIO3_D5: +VDD_BKLT (BL pin 1) -> 12 V
+  gpioset -z -c gpiochip0 0=1    # GPIO0_A0: LVDS_BLEN (BL pin 3)
+  ```
+
+  Test PWM4 through `/sys/class/pwm`: export channel 0, then set `period`
+  25000, `duty_cycle` and `enable` 1.
+
+### RSB-4810 LVGL
+
+[LVGL](https://lvgl.io/) v9.4 from meta-oe (`lvgl_9.4.0.bb`) is configured for
+the RK3568 by `dynamic-layers/openembedded-layer/recipes-graphics/lvgl/lvgl_%.bbappend`
+(applied only when `rk3568` is in `MACHINEOVERRIDES`; other machines get the
+plain meta-oe recipe). LVGL applications can run in two ways, chosen at
+runtime:
+
+* **Wayland:** as a client of Weston (`core-image-weston`), next to other
+  applications. Pointer, touch and keyboard come from the compositor.
+* **DRM/KMS:** directly on the display without a compositor (e.g.
+  `core-image-base`), with evdev input.
+
+**Enabling it in an image.** Add meta-oe to `bblayers.conf`, then in
+`local.conf`:
+
+```
+EXTRA_IMAGE_FEATURES += "lvgl"
+```
+
+This installs `packagegroup-advantech-lvgl`: `liblvgl`, `liblvgl_demos` and
+the `lvgl-demo` widgets demo. Nothing is added to images by default.
+Applications build against the installed library with
+`DEPENDS += "lvgl"` and `pkg-config lvgl` (headers in `/usr/include/lvgl`,
+including the generated `lv_conf.h`).
+
+**Build options** (`PACKAGECONFIG` of `lvgl`; defaults follow the distro
+features):
+
+| Option      | Default                | Effect |
+| ----------- | ---------------------- | ------ |
+| `drm`       | on                     | DRM/KMS display backend (meta-oe default) |
+| `egl`       | with `opengl`          | DRM backend presents through EGL/OpenGL ES on a GBM surface (Mali-G52, Mesa panfrost from meta-rockchip's `mesa.bbappend`); without it, software rendering into DRM dumb buffers |
+| `wayland`   | with `wayland`         | Wayland client backend |
+| `gles-draw` | off                    | OpenGL ES draw unit (GPU drawing); needs `egl`, not possible with `wayland` |
+| `libinput`  | off                    | libinput input driver in addition to evdev |
+
+Change them in `local.conf`, e.g. `PACKAGECONFIG:remove:pn-lvgl = "egl"` for
+pure software rendering, or `PACKAGECONFIG:append:pn-lvgl = " gles-draw"`
+together with `PACKAGECONFIG:remove:pn-lvgl = "wayland"`.
+
+Rendering notes for LVGL v9.4:
+
+* Drawing is done on the CPU with 4 draw threads unless `gles-draw` is
+  enabled. With `egl`, the GPU presents the frames.
+* The Wayland backend renders into shared-memory (`wl_shm`) buffers; its
+  DMA-buffer path needs NXP G2D. Weston composites the window on the GPU.
+* The OpenGL ES draw unit is registered for every display and needs a GL
+  context, so it cannot be combined with the Wayland backend.
+* There is no NanoVG renderer before v9.5.
+
+The configuration is in Kconfig fragments next to the bbappend
+(`lvgl/rk3568/*.cfg`, LVGL v9.4 symbol names). The bbappend also carries two
+small patches for v9.4: a Kconfig "Linux DRM rendering backend" choice, as
+found in LVGL master, and a Wayland fix for windows that the compositor
+configures larger than requested (full screen, kiosk shell). LVGL asserts
+abort the process instead of looping forever. Check the resulting
+configuration in `/usr/include/lvgl/lv_conf.h` of the SDK or sysroot.
+
+**Running the demo.** `lvgl-demo` picks the backend automatically:
+
+* **Wayland,** if `WAYLAND_DISPLAY` is set or Weston's socket
+  `/run/wayland-0` exists. This is the `core-image-weston` case, also from a
+  root shell on the serial console. It opens a full-screen window.
+* **DRM/KMS** otherwise. This needs exclusive access to the display, so
+  stop Weston first (`systemctl stop weston.socket weston.service`).
+
+```sh
+lvgl-demo                                      # Wayland under Weston, else DRM/KMS
+LV_BACKEND=drm LV_DRM_CONNECTOR=<id> LV_EVDEV_DEVICE=/dev/input/eventN lvgl-demo
+```
+
+| Variable                | Default                    | Meaning |
+| ----------------------- | -------------------------- | ------- |
+| `LV_BACKEND`            | auto                       | `wayland` or `drm` |
+| `LV_WAYLAND_FULLSCREEN` | `1`                        | `0` for a normal window |
+| `LV_WAYLAND_SIZE`       | `800x480`                  | window size |
+| `LV_DRM_DEVICE`         | first card with connectors | DRM card, e.g. `/dev/dri/card0` (the VOP2 `rockchip` card, not the panfrost render node) |
+| `LV_DRM_CONNECTOR`      | first connected connector  | DRM connector id, for HDMI vs. LVDS |
+| `LV_EVDEV_DEVICE`       | auto                       | pointer/touch device for DRM (default: all pointer/touch devices, also ones plugged in later), `none` to disable |
+
+**HDMI vs. LVDS.** Under Weston, the outputs are Weston's: the window opens
+on the output Weston chooses. For DRM/KMS, take the connector ids of
+`HDMI-A-1` and `LVDS-1` from `modetest -M rockchip -c`. LVDS needs the
+`lvds` overlay (see [LVDS panel](#rsb-4810-lvds-panel)). Find the
+touchscreen's `eventN` in `/proc/bus/input/devices`.
+
+**Kiosk use.** For a single full-screen LVGL application under Weston, use
+Weston's kiosk shell, which shows every window full screen without a
+panel. In `/etc/xdg/weston/weston.ini`:
+
+```
+[core]
+shell=kiosk-shell.so
+```
+
+With the default desktop shell, the full-screen request is acknowledged,
+but in tests with Weston 13 the window kept its normal position. The board's
+Weston 15 is untested.
+
+To start the demo at boot, install `lvgl-demo-service` (not part of the
+packagegroup). Set the variables with `systemctl edit lvgl-demo`, then run
+`systemctl enable --now lvgl-demo`.
+
+**Known limitations.**
+
+* LVGL has no draw unit for the Rockchip RGA 2D engine.
+* With DRM/KMS: one LVGL display per DRM device. The LVGL DRM driver opens
+  the card as DRM master and drives a single connector/CRTC, so HDMI and
+  LVDS cannot be driven as two LVGL displays at the same time, and not while
+  Weston or X owns the device.
+* Not yet tested on RSB-4810 hardware. The Wayland backend was tested
+  against a headless Weston (window and full screen under the kiosk shell);
+  the DRM/KMS and EGL paths only built.
 
 ## AOM-6881 + SOM-DB2510
 
@@ -267,10 +494,15 @@ recipes-bsp/rkbin/                     Rockchip miniloader (MiniLoaderAll.bin vi
 recipes-bsp/rockchip-pack-tools/       native afptool/rkImageMaker packaging tools
 recipes-bsp/rockchip-sd-installer/     boot service flashing the eMMC from an SD upgrade card
 recipes-bsp/u-boot/                    U-Boot board integration (per-machine .inc + files)
+recipes-graphics/packagegroups/        display test tools (modetest, kmscube)
 recipes-kernel/linux/                  kernel board integration:
   linux-yocto/<machine>.inc            per-machine devicetree/config wiring
-  linux-yocto/<machine>/               board devicetree sources
+  linux-yocto/<machine>/               board devicetree sources, overlays, patches
   linux-yocto/common/                  shared kernel config fragments
+dynamic-layers/openembedded-layer/     only parsed with meta-oe:
+  recipes-graphics/lvgl/               lvgl bbappend (per-SoC .inc, Kconfig
+                                       fragments, patches), lvgl-demo
+  recipes-graphics/packagegroups/      packagegroup-advantech-lvgl
 ```
 
 RAM/storage variants of a board follow the per-variant machine configuration

@@ -1,0 +1,72 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mikhail Tsukerman <miketsukerman@gmail.com>
+Date: Tue, 10 Nov 2026 10:36:35 +0000
+Subject: [PATCH] Kconfig: add a Linux DRM rendering backend choice
+
+v9.4.0 implements GBM buffers (LV_USE_LINUX_DRM_GBM_BUFFERS) and EGL
+rendering (LV_LINUX_DRM_USE_EGL) in the Linux DRM driver, and
+lv_conf_internal.h reads both from CONFIG_ symbols, but Kconfig does not
+define them, so they cannot be enabled in a Kconfig-based build.
+
+Add a "Linux DRM rendering backend" choice selecting them, modelled on
+the equivalent choice in LVGL master. The EGL backend also selects
+LV_USE_OPENGLES; LV_USE_EGL is derived from LV_LINUX_DRM_USE_EGL in
+lv_conf_internal.h.
+
+Upstream-Status: Inappropriate [v9.4.x only; LVGL master already provides an equivalent "Rendering backend" choice]
+Signed-off-by: Mikhail Tsukerman <miketsukerman@gmail.com>
+---
+ Kconfig | 37 +++++++++++++++++++++++++++++++++++++
+ 1 file changed, 37 insertions(+)
+
+diff --git a/Kconfig b/Kconfig
+index 5d05e0c..efb0195 100644
+--- a/Kconfig
++++ b/Kconfig
+@@ -2069,6 +2069,43 @@ menu "LVGL configuration"
+ 			bool "Use Linux DRM device"
+ 			default n
+ 
++		choice
++			prompt "Linux DRM rendering backend"
++			depends on LV_USE_LINUX_DRM
++			default LV_LINUX_DRM_BACKEND_FBDEV
++			help
++				Select how the Linux DRM driver presents rendered frames.
++
++			config LV_LINUX_DRM_BACKEND_FBDEV
++				bool "Dumb buffers (no GPU)"
++				help
++					Software rendering into DRM/KMS dumb buffers.
++
++			config LV_LINUX_DRM_BACKEND_GBM
++				bool "GBM DMA buffers"
++				select LV_USE_LINUX_DRM_GBM_BUFFERS
++				help
++					Use MESA GBM for Linux DRM DMA buffers. Requires linking
++					with libgbm.
++
++			config LV_LINUX_DRM_BACKEND_EGL
++				bool "EGL (OpenGL ES, hardware-accelerated)"
++				select LV_LINUX_DRM_USE_EGL
++				select LV_USE_OPENGLES
++				help
++					Render via OpenGL ES 2.0 and EGL on a GBM surface.
++					Requires libgbm; libEGL and libGLESv2 are loaded at
++					runtime.
++		endchoice
++
++		config LV_USE_LINUX_DRM_GBM_BUFFERS
++			bool
++			depends on LV_USE_LINUX_DRM
++
++		config LV_LINUX_DRM_USE_EGL
++			bool
++			depends on LV_USE_LINUX_DRM
++
+ 		config LV_USE_TFT_ESPI
+ 			bool "Use TFT_eSPI driver"
+ 			default n
+-- 
+2.43.0
+

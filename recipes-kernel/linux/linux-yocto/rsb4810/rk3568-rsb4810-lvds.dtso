@@ -1,0 +1,164 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Advantech RSB-4810: single-channel LVDS0 panel on the 40-pin LVDS
+ * connector (schematic A104-1, sheet 26).
+ *
+ * Needs the out-of-tree "drm/rockchip: add RK3568 LVDS support" series
+ * (provides the &lvds node with the lvds_in/lvds_out ports).
+ *
+ * LVDS0 is fed from VOP2 video port 1: vp0 already drives HDMI and vp2 has
+ * a known bug with this driver.
+ *
+ * Panel supply (jumper VDD2: 1-2 = 3.3 V, 2-3 = 5 V) and backlight supply
+ * (BLP1: 1-2 = 5 V, 2-3 = 3.3 V; BLP2: 1-2 = 12 V) are selected by hand.
+ * For the IDK-1107WR: VDD2 1-2, BLP2 fitted, BLP1 removed.
+ *
+ * Control pins (sheet 12/26). The net names carry stale "_GPIO3_C6/_C7"
+ * suffixes from the Rockchip template; by pin order on U1000-13 the real
+ * balls are GPIO3_D4/D5, while GPIO3_C6..D3 are SDMMC2 (M0) for M.2 SDIO.
+ *   LCD_EN_H_GPIO3_C6  -> GPIO3_D4 -> U14 -> U3930 load switch (VDD_LVDS)
+ *   LCD_RST_L_GPIO3_C7 -> GPIO3_D5 -> Q87/Q86 (+VDD_BKLT power, active high)
+ *   LVDS_BLENH         -> GPIO0_A0 -> U15 -> BL pin 3 (panel Display_ON)
+ *   LCD0_BL_PWM4       -> PWM4     -> BL pin 4 (panel dimming input)
+ */
+
+/dts-v1/;
+/plugin/;
+
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/pinctrl/rockchip.h>
+#include <dt-bindings/soc/rockchip,vop2.h>
+
+&{/} {
+	vdd_lvds: regulator-vdd-lvds {
+		compatible = "regulator-fixed";
+		regulator-name = "vdd_lvds";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		gpio = <&gpio3 RK_PD4 GPIO_ACTIVE_HIGH>;	/* net "LCD_EN_H_GPIO3_C6" */
+		enable-active-high;
+		startup-delay-us = <20000>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&lcd_en_h>;
+	};
+
+	vdd_bklt: regulator-vdd-bklt {
+		compatible = "regulator-fixed";
+		regulator-name = "vdd_bklt_lvds";
+		regulator-min-microvolt = <12000000>;
+		regulator-max-microvolt = <12000000>;
+		gpio = <&gpio3 RK_PD5 GPIO_ACTIVE_HIGH>;	/* net "LCD_RST_L_GPIO3_C7" -> Q87/Q86 */
+		enable-active-high;
+		pinctrl-names = "default";
+		pinctrl-0 = <&lvds_bklt_pwr_h>;
+	};
+
+	backlight_lvds: backlight-lvds {
+		compatible = "pwm-backlight";
+		pwms = <&pwm4 0 25000 0>;
+		power-supply = <&vdd_bklt>;
+		enable-gpios = <&gpio0 RK_PA0 GPIO_ACTIVE_HIGH>;	/* LVDS_BLENH */
+		pinctrl-names = "default";
+		pinctrl-0 = <&lvds_blen_h>;
+		/*
+		 * The G070VW01 dimming input is analog (0.3-5 V), so brightness
+		 * may not track the PWM duty cycle; default to full brightness.
+		 */
+		brightness-levels = <0 255>;
+		num-interpolated-steps = <255>;
+		default-brightness-level = <255>;
+		/* datasheet: >= 200 ms between valid LVDS data and backlight on/off */
+		post-pwm-on-delay-ms = <200>;
+		pwm-off-delay-ms = <200>;
+	};
+
+	panel {
+		/*
+		 * Advantech IDK-1107WR-40WVA1E kit: AUO G070VW01 V0, 7" 800x480,
+		 * single-channel LVDS, DE mode, 3.3 V VDD, 12 V backlight.
+		 * Advantech's RSB-4810 BSP lists it as "lvds-g070vw01".
+		 * TODO: compatible not in the panel-lvds binding enum yet.
+		 * No reset line: the "LCD_RST" net switches backlight power.
+		 */
+		compatible = "advantech,idk-1107wr", "panel-lvds";
+		power-supply = <&vdd_lvds>;
+		backlight = <&backlight_lvds>;
+
+		/* datasheet active area 152.40 x 91.44 mm */
+		width-mm = <152>;
+		height-mm = <91>;
+		/* vendor BSP default lvds format rgb888_vesa; jeida-18 if SEL68 is low */
+		data-mapping = "vesa-24";
+
+		/*
+		 * From Advantech's Rockchip vendor kernel (lcd-g070vw01.dtsi):
+		 * 33.3 MHz, htotal 1056, vtotal 508, ~62 Hz. DE mode, so only the
+		 * totals matter. Advantech's i.MX6 BSP uses 29.5 MHz, hfp 24/
+		 * hbp 96/hsync 72, vfp 10/vbp 3/vsync 7 should this one not lock.
+		 */
+		panel-timing {
+			clock-frequency = <33300000>;
+			hactive = <800>;
+			vactive = <480>;
+			hfront-porch = <200>;
+			hback-porch = <50>;
+			hsync-len = <6>;
+			vfront-porch = <20>;
+			vback-porch = <4>;
+			vsync-len = <4>;
+			de-active = <1>;
+		};
+
+		port {
+			panel_in_lvds: endpoint {
+				remote-endpoint = <&lvds_out_panel>;
+			};
+		};
+	};
+};
+
+&dsi_dphy0 {
+	status = "okay";
+};
+
+&lvds {
+	status = "okay";
+};
+
+&lvds_in {
+	lvds_in_vp1: endpoint {
+		remote-endpoint = <&vp1_out_lvds0>;
+	};
+};
+
+&lvds_out {
+	lvds_out_panel: endpoint {
+		remote-endpoint = <&panel_in_lvds>;
+	};
+};
+
+&pinctrl {
+	lvds-panel {
+		lcd_en_h: lcd-en-h {
+			rockchip,pins = <3 RK_PD4 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+
+		lvds_bklt_pwr_h: lvds-bklt-pwr-h {
+			rockchip,pins = <3 RK_PD5 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+
+		lvds_blen_h: lvds-blen-h {
+			rockchip,pins = <0 RK_PA0 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+	};
+};
+
+&vp1 {
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	vp1_out_lvds0: endpoint@ROCKCHIP_VOP2_EP_LVDS0 {
+		reg = <ROCKCHIP_VOP2_EP_LVDS0>;
+		remote-endpoint = <&lvds_in_vp1>;
+	};
+};
