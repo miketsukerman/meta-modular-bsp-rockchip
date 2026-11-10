@@ -11,7 +11,7 @@ Type=simple
 #   [Service]
 #   Environment=LV_BACKEND=drm
 #   Environment=LV_DRM_CONNECTOR=<id from "modetest -M rockchip -c">
-#   Environment=LV_EVDEV_DEVICE=/dev/input/by-path/<touchscreen>-event
+#   Environment=LV_EVDEV_DEVICE=/dev/input/by-id/<touchscreen>-event
 ExecStart=/usr/bin/lvgl-demo
 Restart=on-failure
 

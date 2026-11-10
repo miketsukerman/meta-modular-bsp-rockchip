@@ -398,7 +398,7 @@ LV_BACKEND=drm LV_DRM_CONNECTOR=<id> LV_EVDEV_DEVICE=/dev/input/eventN lvgl-demo
 | `LV_WAYLAND_SIZE`       | `800x480`                  | window size |
 | `LV_DRM_DEVICE`         | first card with connectors | DRM card, e.g. `/dev/dri/card0` (the VOP2 `rockchip` card, not the panfrost render node) |
 | `LV_DRM_CONNECTOR`      | first connected connector  | DRM connector id, for HDMI vs. LVDS |
-| `LV_EVDEV_DEVICE`       | `/dev/input/event0`        | pointer/touch device for DRM, `none` to disable |
+| `LV_EVDEV_DEVICE`       | auto                       | pointer/touch device for DRM (default: all pointer/touch devices, also ones plugged in later), `none` to disable |
 
 **HDMI vs. LVDS.** Under Weston, the outputs are Weston's: the window opens
 on the output Weston chooses. For DRM/KMS, take the connector ids of

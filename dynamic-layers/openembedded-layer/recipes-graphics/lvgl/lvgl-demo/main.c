@@ -18,8 +18,10 @@
  *                     connector, from lv_linux_drm_find_device_path())
  *   LV_DRM_CONNECTOR  DRM connector id (default: first connected one);
  *                     list ids with "modetest -M rockchip -c"
- *   LV_EVDEV_DEVICE   evdev input device for the pointer/touchscreen
- *                     (default: /dev/input/event0), "none" to disable
+ *   LV_EVDEV_DEVICE   evdev input device for the pointer/touchscreen;
+ *                     default: all pointer and touch devices in
+ *                     /dev/input, including ones plugged in later;
+ *                     "none" to disable
  */
 
 #include <errno.h>
@@ -140,6 +142,20 @@ static int run_wayland(void)
 #endif /* LV_USE_WAYLAND */
 
 #if LV_USE_LINUX_DRM
+static void on_evdev_found(lv_indev_t *indev, lv_evdev_type_t type, void *user_data)
+{
+    lv_display_t *disp = user_data;
+
+    if (type == LV_EVDEV_TYPE_KEY) {
+        /* keys (e.g. the PMIC power button) are not used by the demo */
+        lv_evdev_delete(indev);
+        return;
+    }
+    lv_indev_set_display(indev, disp);
+    printf("lvgl-demo: using %s input device\n",
+           type == LV_EVDEV_TYPE_ABS ? "touch/absolute" : "mouse/relative");
+}
+
 static int run_drm(void)
 {
     const char *env_card = getenv("LV_DRM_DEVICE");
@@ -184,9 +200,10 @@ static int run_drm(void)
     if (found_card)
         lv_free(found_card);
 
-    if (!env_evdev || !*env_evdev)
-        env_evdev = "/dev/input/event0";
-    if (strcmp(env_evdev, "none") != 0) {
+    if (!env_evdev || !*env_evdev) {
+        if (lv_evdev_discovery_start(on_evdev_found, disp) != LV_RESULT_OK)
+            fprintf(stderr, "lvgl-demo: evdev discovery failed, running without input\n");
+    } else if (strcmp(env_evdev, "none") != 0) {
         lv_indev_t *indev = lv_evdev_create(LV_INDEV_TYPE_POINTER, env_evdev);
 
         if (indev)
