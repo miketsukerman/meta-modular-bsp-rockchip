@@ -1,0 +1,15 @@
+[Unit]
+Description=LVGL widgets demo on the DRM/KMS display
+ConditionPathExists=/dev/dri
+
+[Service]
+Type=simple
+# Select the output and input with "systemctl edit lvgl-demo", e.g.
+#   [Service]
+#   Environment=LV_DRM_CONNECTOR=<id from "modetest -M rockchip -c">
+#   Environment=LV_EVDEV_DEVICE=/dev/input/by-path/<touchscreen>-event
+ExecStart=/usr/bin/lvgl-demo-drm
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
