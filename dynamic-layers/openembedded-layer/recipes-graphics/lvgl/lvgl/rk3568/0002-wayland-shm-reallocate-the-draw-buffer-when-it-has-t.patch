@@ -1,0 +1,65 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mikhail Tsukerman <miketsukerman@gmail.com>
+Date: Tue, 10 Nov 2026 14:25:05 +0000
+Subject: [PATCH] wayland: shm: reallocate the draw buffer when it has to grow
+
+lv_wayland_shm_resize_window() resizes the LVGL draw buffer with
+lv_draw_buf_reshape(), which fails when the buffer is too small for the
+new size and returns NULL. The window then has no draw buffer and LVGL
+only logs "No draw buffer" on every refresh, so nothing is ever drawn.
+
+This happens whenever the compositor configures the surface larger than
+the size passed to lv_wayland_window_create(), e.g. right at startup
+under Weston's kiosk shell or after a fullscreen request.
+
+Allocate a new draw buffer of the required size in that case and hand
+it to the display.
+
+Upstream-Status: Inappropriate [v9.4.x only; the Wayland driver was reworked for v9.5]
+Signed-off-by: Mikhail Tsukerman <miketsukerman@gmail.com>
+---
+ src/drivers/wayland/lv_wl_shm.c | 28 +++++++++++++++++++++++++---
+ 1 file changed, 25 insertions(+), 3 deletions(-)
+
+diff --git a/src/drivers/wayland/lv_wl_shm.c b/src/drivers/wayland/lv_wl_shm.c
+index 5d479b0..43872f7 100644
+--- a/src/drivers/wayland/lv_wl_shm.c
++++ b/src/drivers/wayland/lv_wl_shm.c
+@@ -156,9 +156,31 @@ lv_result_t lv_wayland_shm_resize_window(shm_ctx_t * context, struct window * wi
+ 
+     if(window->lv_disp != NULL) {
+         /* Resize draw buffer */
+-        const uint32_t stride = lv_draw_buf_width_to_stride(width, lv_display_get_color_format(window->lv_disp));
+-        window->lv_draw_buf = lv_draw_buf_reshape(window->lv_draw_buf, lv_display_get_color_format(window->lv_disp),
+-                                                  width, height / LVGL_DRAW_BUFFER_DIV, stride);
++        const lv_color_format_t cf = lv_display_get_color_format(window->lv_disp);
++        const uint32_t stride = lv_draw_buf_width_to_stride(width, cf);
++        lv_draw_buf_t * draw_buf = lv_draw_buf_reshape(window->lv_draw_buf, cf, width,
++                                                       height / LVGL_DRAW_BUFFER_DIV, stride);
++
++        if(draw_buf == NULL) {
++            /* Reshaping cannot grow the buffer, e.g. when the compositor
++             * configures a fullscreen surface larger than the requested
++             * window size. Replace it with a buffer of the new size. */
++            lv_draw_buf_t * old_buf = window->lv_draw_buf;
++
++            draw_buf = lv_draw_buf_create(width, height / LVGL_DRAW_BUFFER_DIV, cf, stride);
++            if(draw_buf == NULL) {
++                LV_LOG_ERROR("Cannot allocate a %dx%d draw buffer", width, height);
++                return LV_RESULT_INVALID;
++            }
++            /* At startup lv_wayland_window_create() attaches
++             * window->lv_draw_buf once the surface is configured; later
++             * the display still uses the old buffer, so replace it there. */
++            if(window->is_window_configured) {
++                lv_display_set_draw_buffers(window->lv_disp, draw_buf, NULL);
++            }
++            if(old_buf) lv_draw_buf_destroy(old_buf);
++        }
++        window->lv_draw_buf = draw_buf;
+     }
+ 
+     return LV_RESULT_OK;
+-- 
+2.43.0
+
