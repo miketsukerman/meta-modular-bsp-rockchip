@@ -1,7 +1,8 @@
-SUMMARY = "LVGL widgets demo on a Linux DRM/KMS display"
-DESCRIPTION = "Runs the LVGL widgets demo full-screen on a DRM/KMS output \
-with evdev pointer/touch input, using the system LVGL library. The DRM \
-card, connector and input device are selected with environment variables \
+SUMMARY = "LVGL widgets demo for Wayland (Weston) and DRM/KMS"
+DESCRIPTION = "Runs the LVGL widgets demo with the system LVGL library, as a \
+Wayland client (full screen under Weston) when a compositor is running, or \
+directly on a DRM/KMS output with evdev input otherwise. The backend, DRM \
+card/connector and input device are selected with environment variables \
 (see main.c). The optional ${PN}-service package adds a systemd unit that \
 is not enabled by default."
 HOMEPAGE = "https://lvgl.io/"
@@ -22,8 +23,8 @@ DEPENDS = "lvgl libdrm"
 
 inherit cmake pkgconfig systemd
 
-# Needs an LVGL built with the DRM, evdev and widgets demo options, which
-# lvgl_%.bbappend only enables for RK3568, and is built against that
+# Needs an LVGL built with the DRM/Wayland, evdev and widgets demo options,
+# which lvgl_%.bbappend only enables for RK3568, and is built against that
 # machine-specific lv_conf.h.
 COMPATIBLE_MACHINE = "(rk3568)"
 PACKAGE_ARCH = "${MACHINE_ARCH}"

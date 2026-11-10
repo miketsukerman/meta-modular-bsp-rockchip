@@ -1,5 +1,5 @@
-SUMMARY = "LVGL runtime and DRM demo for Advantech boards"
-DESCRIPTION = "LVGL library and the lvgl-demo-drm widgets demo. The GPU \
+SUMMARY = "LVGL runtime and demo for Advantech boards"
+DESCRIPTION = "LVGL library and the lvgl-demo widgets demo. The GPU \
 runtime (libEGL/libGLESv2) is pulled in by lvgl itself when it is built \
 with PACKAGECONFIG \"egl\". Add it to an image with \
 EXTRA_IMAGE_FEATURES += \"lvgl\"."
@@ -13,5 +13,5 @@ COMPATIBLE_MACHINE = "(rk3568)"
 
 RDEPENDS:${PN} = " \
     lvgl \
-    lvgl-demo-drm \
+    lvgl-demo \
 "

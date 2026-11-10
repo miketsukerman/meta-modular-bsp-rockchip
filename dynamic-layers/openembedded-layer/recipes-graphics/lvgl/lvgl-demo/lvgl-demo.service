@@ -1,14 +1,18 @@
 [Unit]
-Description=LVGL widgets demo on the DRM/KMS display
+Description=LVGL widgets demo (Wayland client under Weston, else DRM/KMS)
 ConditionPathExists=/dev/dri
+# With Weston (core-image-weston) the demo connects to /run/wayland-0;
+# without a compositor it drives the display directly.
+After=weston.service
 
 [Service]
 Type=simple
-# Select the output and input with "systemctl edit lvgl-demo", e.g.
+# Select the backend, output and input with "systemctl edit lvgl-demo":
 #   [Service]
+#   Environment=LV_BACKEND=drm
 #   Environment=LV_DRM_CONNECTOR=<id from "modetest -M rockchip -c">
 #   Environment=LV_EVDEV_DEVICE=/dev/input/by-path/<touchscreen>-event
-ExecStart=/usr/bin/lvgl-demo-drm
+ExecStart=/usr/bin/lvgl-demo
 Restart=on-failure
 
 [Install]
